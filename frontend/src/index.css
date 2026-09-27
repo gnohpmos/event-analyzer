@@ -1,0 +1,379 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* =========================================================================
+     LIGHT MODE (Default & .light) - Low-Glare Soft Slate & Mist Canvas
+     Background: Soft misty slate (#e8ecf1) - Eliminates harsh white glare
+     Cards: Calming frosted cloud (#f2f5f8) - Zero pure white (#ffffff)
+     Text: Deep rich charcoal (#0f172a) - High clarity, zero eye strain
+     ========================================================================= */
+  :root,
+  .light {
+    --background: 215 18% 92.5%;
+    --foreground: 222.2 47% 12%;
+    --card: 214 20% 96.5%;
+    --card-foreground: 222.2 47% 12%;
+    --popover: 214 20% 96.5%;
+    --popover-foreground: 222.2 47% 12%;
+    --primary: 221.2 80% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 214 16% 88%;
+    --secondary-foreground: 222.2 47% 12%;
+    --muted: 214 16% 88%;
+    --muted-foreground: 215 16% 38%;
+    --accent: 214 16% 88%;
+    --accent-foreground: 222.2 47% 12%;
+    --destructive: 350 75% 42%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 18% 83%;
+    --input: 214 18% 83%;
+    --ring: 221.2 80% 50%;
+    --radius: 0.75rem;
+
+    /* Slate Palette Mapping for Light Mode */
+    --slate-950: 215 18% 92.5%;
+    --slate-900: 214 20% 96.5%;
+    --slate-800: 214 16% 88%;
+    --slate-700: 214 18% 83%;
+    --slate-600: 214 14% 68%;
+    --slate-500: 215 14% 48%;
+    --slate-400: 215 16% 38%;
+    --slate-300: 222.2 35% 24%;
+    --slate-200: 222.2 42% 16%;
+    --slate-100: 222.2 47% 12%;
+    --slate-50: 222.2 50% 8%;
+  }
+
+  /* =========================================================================
+     DARK MODE (.dark) - Low Glare & Layered Surfaces
+     Background: Deep Slate Navy (No pure black #000000)
+     Text: Soft Off-White (No pure white #ffffff glare)
+     ========================================================================= */
+  .dark {
+    --background: 222.2 47% 9%;
+    --foreground: 210 40% 96%;
+    --card: 217.2 32.6% 12.5%;
+    --card-foreground: 210 40% 96%;
+    --popover: 217.2 32.6% 12.5%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 226 70% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217.2 32.6% 18%;
+    --muted-foreground: 215 20.2% 68%;
+    --accent: 217.2 32.6% 18%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 20%;
+    --input: 217.2 32.6% 20%;
+    --ring: 226 70% 60%;
+
+    /* Slate Palette Mapping for Dark Mode */
+    --slate-950: 222.2 47% 9%;
+    --slate-900: 217.2 32.6% 12.5%;
+    --slate-800: 217.2 32.6% 18%;
+    --slate-700: 217.2 32.6% 24%;
+    --slate-600: 215 20% 36%;
+    --slate-500: 215 16% 50%;
+    --slate-400: 215 20.2% 68%;
+    --slate-300: 215 25% 82%;
+    --slate-200: 210 35% 90%;
+    --slate-100: 210 40% 96%;
+    --slate-50: 210 40% 98%;
+  }
+
+  /* =========================================================================
+     EARTH TONE MODE (.earth) - Organic Linen, Sandstone & Warm Terracotta
+     Background: Natural warm linen sand (Filters blue-light, eye soothing)
+     Text: Deep roast walnut / espresso (Zero glare, organic clarity)
+     ========================================================================= */
+  .earth {
+    --background: 38 24% 94%;
+    --foreground: 26 18% 15%;
+    --card: 38 32% 98.2%;
+    --card-foreground: 26 18% 15%;
+    --popover: 38 32% 98.2%;
+    --popover-foreground: 26 18% 15%;
+    --primary: 20 62% 44%;
+    --primary-foreground: 38 35% 98%;
+    --secondary: 36 20% 89%;
+    --secondary-foreground: 26 18% 15%;
+    --muted: 36 20% 89%;
+    --muted-foreground: 28 12% 42%;
+    --accent: 36 24% 91%;
+    --accent-foreground: 26 18% 15%;
+    --destructive: 12 68% 44%;
+    --destructive-foreground: 38 35% 98%;
+    --border: 34 18% 84%;
+    --input: 34 18% 84%;
+    --ring: 20 62% 44%;
+
+    /* Slate Palette Mapping for Earth Tone Mode */
+    --slate-950: 38 24% 94%;
+    --slate-900: 38 32% 98.2%;
+    --slate-800: 36 20% 89%;
+    --slate-700: 34 18% 84%;
+    --slate-600: 32 14% 72%;
+    --slate-500: 28 12% 55%;
+    --slate-400: 28 12% 42%;
+    --slate-300: 26 16% 28%;
+    --slate-200: 26 18% 20%;
+    --slate-100: 26 18% 15%;
+    --slate-50: 26 22% 10%;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ensure smooth theme transitions */
+button, input, select, textarea, div, section, header, footer, table {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* =========================================================================
+   LIGHT & EARTH TONE VISUAL ERGONOMICS OVERRIDES
+   Fixes harsh neon contrast, dirty/murky dark tints, and unreadable badges
+   ========================================================================= */
+
+/* --- Light Mode Color Overrides --- */
+.light .text-cyan-200,
+.light .text-cyan-300,
+.light .text-cyan-400 {
+  color: hsl(192 85% 26%) !important;
+}
+
+.light .text-amber-200,
+.light .text-amber-300,
+.light .text-amber-400 {
+  color: hsl(35 90% 28%) !important;
+}
+
+.light .text-emerald-300,
+.light .text-emerald-400 {
+  color: hsl(158 75% 26%) !important;
+}
+
+.light .text-rose-300,
+.light .text-rose-400 {
+  color: hsl(350 75% 36%) !important;
+}
+
+.light .text-blue-200,
+.light .text-blue-300,
+.light .text-blue-400 {
+  color: hsl(221 72% 40%) !important;
+}
+
+.light .text-purple-300,
+.light .text-purple-400 {
+  color: hsl(270 65% 38%) !important;
+}
+
+.light .text-orange-300,
+.light .text-orange-400 {
+  color: hsl(24 85% 34%) !important;
+}
+
+.light .text-indigo-300,
+.light .text-indigo-400 {
+  color: hsl(235 65% 42%) !important;
+}
+
+/* Light Mode Background Tint Overrides (Soft, low-glare toned pastels) */
+.light .bg-cyan-950\/20,
+.light [class*="bg-cyan-950"] {
+  background-color: hsl(192 55% 91%) !important;
+  border-color: hsl(192 45% 78%) !important;
+}
+
+.light .bg-amber-950\/20,
+.light [class*="bg-amber-950"] {
+  background-color: hsl(42 65% 90%) !important;
+  border-color: hsl(40 50% 76%) !important;
+}
+
+.light .bg-emerald-950\/20,
+.light [class*="bg-emerald-950"] {
+  background-color: hsl(150 45% 90%) !important;
+  border-color: hsl(150 35% 76%) !important;
+}
+
+.light .bg-rose-950\/20,
+.light [class*="bg-rose-950"] {
+  background-color: hsl(355 55% 91%) !important;
+  border-color: hsl(355 40% 78%) !important;
+}
+
+.light .bg-blue-950\/20,
+.light [class*="bg-blue-950"] {
+  background-color: hsl(214 55% 91%) !important;
+  border-color: hsl(214 40% 78%) !important;
+}
+
+.light .bg-slate-950\/60,
+.light .bg-slate-950\/70,
+.light .bg-slate-950 {
+  background-color: hsl(215 18% 90%) !important;
+  border-color: hsl(214 18% 83%) !important;
+}
+
+.light .bg-slate-900\/50,
+.light .bg-slate-900\/90,
+.light .bg-slate-900 {
+  background-color: hsl(214 16% 88%) !important;
+  border-color: hsl(214 18% 83%) !important;
+}
+
+/* --- Earth Tone Mode Color Overrides (Warm Organic Hues) --- */
+.earth .text-cyan-200,
+.earth .text-cyan-300,
+.earth .text-cyan-400 {
+  color: hsl(185 55% 26%) !important;
+}
+
+.earth .text-amber-200,
+.earth .text-amber-300,
+.earth .text-amber-400 {
+  color: hsl(34 78% 30%) !important;
+}
+
+.earth .text-emerald-300,
+.earth .text-emerald-400 {
+  color: hsl(140 45% 26%) !important;
+}
+
+.earth .text-rose-300,
+.earth .text-rose-400 {
+  color: hsl(12 65% 36%) !important;
+}
+
+.earth .text-blue-200,
+.earth .text-blue-300,
+.earth .text-blue-400 {
+  color: hsl(205 50% 30%) !important;
+}
+
+.earth .text-purple-300,
+.earth .text-purple-400 {
+  color: hsl(280 40% 34%) !important;
+}
+
+.earth .text-orange-300,
+.earth .text-orange-400 {
+  color: hsl(20 70% 36%) !important;
+}
+
+.earth .text-indigo-300,
+.earth .text-indigo-400 {
+  color: hsl(215 45% 34%) !important;
+}
+
+/* Earth Tone Background Tint Overrides (Warm organic tints) */
+.earth .bg-cyan-950\/20,
+.earth [class*="bg-cyan-950"] {
+  background-color: hsl(185 45% 93%) !important;
+  border-color: hsl(185 35% 80%) !important;
+}
+
+.earth .bg-amber-950\/20,
+.earth [class*="bg-amber-950"] {
+  background-color: hsl(40 65% 92%) !important;
+  border-color: hsl(40 50% 78%) !important;
+}
+
+.earth .bg-emerald-950\/20,
+.earth [class*="bg-emerald-950"] {
+  background-color: hsl(135 40% 92%) !important;
+  border-color: hsl(135 35% 78%) !important;
+}
+
+.earth .bg-rose-950\/20,
+.earth [class*="bg-rose-950"] {
+  background-color: hsl(12 55% 93%) !important;
+  border-color: hsl(12 45% 82%) !important;
+}
+
+.earth .bg-blue-950\/20,
+.earth [class*="bg-blue-950"] {
+  background-color: hsl(205 40% 93%) !important;
+  border-color: hsl(205 35% 80%) !important;
+}
+
+.earth .bg-slate-950\/60,
+.earth .bg-slate-950\/70,
+.earth .bg-slate-950 {
+  background-color: hsl(36 22% 91%) !important;
+  border-color: hsl(34 18% 83%) !important;
+}
+
+.earth .bg-slate-900\/50,
+.earth .bg-slate-900\/90,
+.earth .bg-slate-900 {
+  background-color: hsl(36 20% 89%) !important;
+  border-color: hsl(34 18% 83%) !important;
+}
+
+/* --- Common Fixes for Light & Earth Modes --- */
+.light input:not([type="checkbox"]):not([type="radio"]),
+.light select,
+.light textarea,
+.earth input:not([type="checkbox"]):not([type="radio"]),
+.earth select,
+.earth textarea {
+  color: hsl(var(--foreground)) !important;
+}
+
+.light .text-white:not(button):not(button *):not([class*="bg-primary"]):not([class*="bg-indigo"]):not([class*="bg-rose"]):not([class*="bg-emerald"]):not([class*="bg-amber"]),
+.earth .text-white:not(button):not(button *):not([class*="bg-primary"]):not([class*="bg-indigo"]):not([class*="bg-rose"]):not([class*="bg-emerald"]):not([class*="bg-amber"]) {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Subtle, low-glare shadows */
+.light .shadow-sm,
+.light .shadow-md,
+.light .shadow-lg,
+.light .shadow-xl {
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03) !important;
+}
+
+.earth .shadow-sm,
+.earth .shadow-md,
+.earth .shadow-lg,
+.earth .shadow-xl {
+  box-shadow: 0 1px 3px 0 rgba(45, 37, 30, 0.05), 0 1px 2px -1px rgba(45, 37, 30, 0.03) !important;
+}
+
+.light .border-slate-800,
+.earth .border-slate-800 {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--slate-700));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--slate-600));
+}

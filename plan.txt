@@ -1,0 +1,2192 @@
+# Project: Multi-Source Network Event & Incident Analysis Platform
+
+ให้พัฒนา Web Application สำหรับรับ Event จากระบบ Monitoring / Management หลายประเภท เพื่อใช้เป็นศูนย์กลางสำหรับ Event Processing, Incident Tracking, Verification และ Classification
+
+ใน Version แรกให้รองรับ PRTG Network Monitor เป็น Event Source แรก โดยรับ HTTP Notification เมื่อ Router DOWN และ UP
+
+ในอนาคตระบบต้องสามารถรับ Event จากระบบอื่นเพิ่มเติมได้ โดยไม่ต้อง Rewrite Core Business Logic
+
+ระบบต้องออกแบบให้ Modular, Maintainable, Extendable และไม่กระทบต่อการทำงานเดิมเมื่อเพิ่ม Event Source หรือ Analysis Flow ใหม่ในอนาคต
+
+ห้าม Implement Feature หรือ Root Cause Flow ที่ไม่ได้ระบุไว้ใน Prompt นี้
+
+---
+
+# 1. My Architecture
+
+ให้ยึด Architecture ต่อไปนี้เป็น Source of Truth
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| API & Backend | Django | Core auth hooks, ORM, business endpoints |
+| Frontend | React + TypeScript + Vite + Tailwind CSS + shadcn/ui | Client UI, secure UX design tokens |
+| Environment | Docker | รัน Application ในรูปแบบ Container |
+
+## Architecture Constraints
+
+ต้องปฏิบัติตามข้อกำหนดดังนี้
+
+- Backend ต้องใช้ Django
+- Frontend ต้องใช้ React
+- Frontend Language ต้องใช้ TypeScript
+- Build Tool ต้องใช้ Vite
+- Styling ต้องใช้ Tailwind CSS
+- UI Components ให้ใช้ shadcn/ui
+- ระบบต้องสามารถรันผ่าน Docker
+- Backend และ Frontend ต้องแยก Responsibility ชัดเจน
+- Business Logic หลักต้องอยู่ฝั่ง Django Backend
+- React ห้ามตัดสิน Business Logic หลัก
+- ห้ามเปลี่ยน Technology Stack หลักโดยไม่ได้รับคำสั่ง
+- ห้ามเพิ่ม Framework หรือ Technology ที่ทำหน้าที่ซ้ำกับ Stack ที่กำหนดไว้
+
+หาก Requirement จำเป็นต้องมี Component เพิ่มเติม เช่น:
+
+- Relational Database
+- Background Worker
+- Message Queue
+- Cache
+- Authentication / SSO
+- Scheduler
+- Event Streaming
+- Monitoring Component
+
+ให้ดำเนินการก่อน Implement ดังนี้:
+
+1. อธิบายว่าจำเป็นเพราะอะไร
+2. เสนอ Technology ที่เหมาะสม
+3. อธิบายผลกระทบต่อ Architecture
+4. เสนอ Alternative ถ้ามี
+5. รอการอนุมัติก่อน Implement
+
+ห้ามเพิ่ม Technology ดังกล่าวโดยอัตโนมัติ
+
+---
+
+# 2. Core Architecture Principle
+
+ระบบนี้ต้องออกแบบเป็น:
+
+MULTI-SOURCE EVENT PLATFORM
+
+ตั้งแต่ Version แรก
+
+PRTG เป็นเพียง Event Source แรกของระบบ
+
+Core Business Logic ต้องไม่ผูกกับ PRTG โดยตรง
+
+Architecture หลักต้องเป็น:
+
+External Event Source
+
+→ Source Adapter
+
+→ Validation
+
+→ Normalization
+
+→ Normalized Event
+
+→ Core Event Engine
+
+→ Incident
+
+→ Verification
+
+→ Classification
+
+→ Dashboard
+
+---
+
+# 3. Future Event Sources
+
+ระบบต้องสามารถรองรับ Event Source เพิ่มเติมในอนาคต เช่น:
+
+- PRTG
+- Network Monitoring System
+- Network Management System
+- Element Management System
+- Syslog Platform
+- SNMP Trap Receiver
+- Custom Application
+- Internal API
+- External Webhook
+- Transmission Monitoring
+- Security Monitoring
+- Other Monitoring Platforms
+
+Version แรกให้ Implement เฉพาะ:
+
+PRTG Adapter
+
+แต่ Foundation ต้องรองรับ Source อื่นได้โดยไม่ต้อง Rewrite Core Logic
+
+---
+
+# 4. Source Adapter Pattern
+
+ทุก External Source ต้องมี Adapter ของตัวเอง
+
+ตัวอย่าง Architecture:
+
+```text
+PRTG
+   |
+   v
+PRTG Adapter
+   |
+   v
+Normalized Event
+   |
+   v
+Core Event Engine
+```
+
+ในอนาคต:
+
+```text
+Other NMS
+   |
+   v
+Other NMS Adapter
+   |
+   v
+Normalized Event
+   |
+   v
+Core Event Engine
+```
+
+การเพิ่ม Source ใหม่ควรทำโดย:
+
+1. เพิ่ม Integration Adapter
+2. เพิ่ม Payload Mapping
+3. เพิ่ม Validation
+4. Convert เป็น Normalized Event
+
+โดยไม่ต้องแก้ Incident Logic หลัก
+
+---
+
+# 5. Suggested Integration Structure
+
+ให้พิจารณา Structure เช่น:
+
+```text
+backend/
+│
+├── integrations/
+│   │
+│   ├── base/
+│   │   ├── adapter.py
+│   │   ├── schemas.py
+│   │   └── interfaces.py
+│   │
+│   ├── prtg/
+│   │   ├── adapter.py
+│   │   ├── normalizer.py
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   └── services.py
+│   │
+│   └── future_sources/
+│
+├── devices/
+├── events/
+├── incidents/
+├── verification/
+├── classification/
+└── common/
+```
+
+สามารถปรับ Structure ได้หากมีเหตุผลที่ดีกว่า
+
+แต่ต้องรักษาหลัก:
+
+Separation of Concerns
+
+---
+
+# 6. Normalized Event
+
+Core System ต้องประมวลผลเฉพาะ Normalized Event
+
+ห้ามใช้ Raw PRTG Payload โดยตรงใน Core Business Logic
+
+Normalized Event ควรมี Concept อย่างน้อย:
+
+```text
+source
+source_event_id
+
+event_type
+event_status
+severity
+
+device_name
+device_ip
+
+event_time
+received_time
+
+message
+
+metadata
+raw_payload
+```
+
+ตัวอย่าง:
+
+```json
+{
+  "source": "PRTG",
+  "event_type": "DEVICE_REACHABILITY",
+  "event_status": "DOWN",
+  "device_name": "BKK-PE-01",
+  "device_ip": "10.10.10.1",
+  "event_time": "2026-09-25T20:01:10+07:00",
+  "message": "Request timed out"
+}
+```
+
+---
+
+# 7. Source-Specific Metadata
+
+ข้อมูลเฉพาะของ Source เช่น:
+
+- PRTG Device ID
+- PRTG Sensor ID
+- PRTG Sensor Name
+- PRTG Status Message
+
+ไม่ควรเป็น Core Incident Field โดยตรง
+
+ให้เก็บใน:
+
+metadata
+
+หรือ Integration-specific Data Structure
+
+ตัวอย่าง:
+
+```json
+{
+  "prtg_device_id": "1001",
+  "prtg_sensor_id": "2001",
+  "prtg_sensor_name": "Ping"
+}
+```
+
+---
+
+# 8. Current Version Objective
+
+เป้าหมายของ Version แรกคือ:
+
+PRTG DOWN/UP
+
+→ Normalize Event
+
+→ Store Event
+
+→ Track Router Incident
+
+→ เมื่อ Routerกลับมา UP ให้ตรวจสอบ SNMP sysUpTime
+
+→ วิเคราะห์ว่า Router มีการ Reboot หรือไม่
+
+→ ถ้าไม่มี Evidence ว่า Reboot ให้ Classification เป็น Connectivity Loss
+
+→ Store Evidence
+
+→ Store Classification
+
+→ Display Result on Dashboard
+
+ยังไม่ต้องทำ Root Cause Analysis ต่อจาก Classification
+
+---
+
+# 9. Current PRTG Flow
+
+PRTG ทำหน้าที่ Ping Router
+
+เมื่อ Router DOWN:
+
+```text
+PRTG
+   |
+   v
+HTTP Notification
+   |
+   v
+PRTG Adapter
+   |
+   v
+Normalized Event
+   |
+   v
+Core Event Engine
+```
+
+เมื่อ Router UP:
+
+```text
+PRTG
+   |
+   v
+HTTP Notification
+   |
+   v
+PRTG Adapter
+   |
+   v
+Normalized Event
+   |
+   v
+Core Event Engine
+   |
+   v
+Recovery Verification
+```
+
+---
+
+# 10. Event Type
+
+ใน Version แรกให้ใช้ Generic Event Type:
+
+```text
+DEVICE_REACHABILITY
+```
+
+และ Event Status:
+
+```text
+DOWN
+UP
+```
+
+ห้ามใช้ Core Logic เช่น:
+
+```text
+if prtg_status == "UP"
+```
+
+ให้ใช้:
+
+```text
+event_type == DEVICE_REACHABILITY
+
+and
+
+event_status == UP
+```
+
+เพื่อให้ Source อื่นในอนาคตสามารถ Trigger Flow เดียวกันได้
+
+---
+
+# 11. FLOW A — Device DOWN
+
+เมื่อ Core Event Engine ได้รับ:
+
+```text
+event_type = DEVICE_REACHABILITY
+event_status = DOWN
+```
+
+ให้:
+
+1. Validate Normalized Event
+2. Identify Device
+3. ตรวจสอบ Active Incident
+4. ตรวจสอบ Duplicate Event
+5. Create หรือ Update Incident
+
+---
+
+# 12. New DOWN Incident
+
+ถ้ายังไม่มี Active Incident ที่สัมพันธ์กับ Device นี้
+
+ให้สร้าง Incident ใหม่
+
+บันทึกอย่างน้อย:
+
+```text
+Incident Number
+Device
+Status
+Down Time
+Last Seen
+Created At
+Updated At
+```
+
+Incident Status:
+
+```text
+DOWN
+```
+
+และสร้าง Event Timeline:
+
+```text
+DOWN
+```
+
+---
+
+# 13. Duplicate DOWN
+
+ถ้ามี Active Incident อยู่แล้ว
+
+ห้ามสร้าง Incident ใหม่
+
+ให้สร้าง Event:
+
+```text
+DOWN_REPEAT
+```
+
+และ Update:
+
+```text
+Last Seen
+Updated At
+```
+
+ต้องรองรับ:
+
+- Duplicate Event
+- Retransmission
+- Concurrent Request
+- Race Condition
+
+---
+
+# 14. FLOW B — Device UP
+
+เมื่อได้รับ:
+
+```text
+event_type = DEVICE_REACHABILITY
+event_status = UP
+```
+
+ให้:
+
+1. Identify Device
+2. Find Active DOWN Incident
+3. Create Event:
+
+```text
+UP_RECEIVED
+```
+
+4. Save Up Time
+5. เปลี่ยน Status เป็น:
+
+```text
+RECOVERY_CHECK
+```
+
+6. เริ่ม SNMP Verification
+
+---
+
+# 15. UP Without Active Incident
+
+ถ้าได้รับ UP แต่ไม่มี Active DOWN Incident
+
+ห้ามสร้าง Incident ปลอม
+
+ให้สร้าง Audit Event:
+
+```text
+UP_WITHOUT_ACTIVE_INCIDENT
+```
+
+และ Log ไว้
+
+---
+
+# 16. Recovery Principle
+
+Event UP หมายความว่า Reachability กลับมา
+
+แต่ยังไม่ควรปิด Incident ทันที
+
+Flow:
+
+```text
+UP
+ |
+ v
+RECOVERY_CHECK
+ |
+ v
+SNMP Verification
+ |
+ v
+Classification
+ |
+ v
+RECOVERED
+```
+
+---
+
+# 17. SNMP Verification
+
+หลัง Device กลับมา UP
+
+ให้ตรวจสอบ Router ด้วย SNMP
+
+Query:
+
+```text
+sysUpTime
+```
+
+OID:
+
+```text
+1.3.6.1.2.1.1.3.0
+```
+
+ให้แปลงเป็น:
+
+```text
+router_uptime_seconds
+```
+
+เก็บ:
+
+```text
+SNMP Check Time
+Raw sysUpTime
+Router Uptime Seconds
+SNMP Result
+SNMP Error
+```
+
+---
+
+# 18. SNMP Version
+
+Version แรกต้องรองรับ:
+
+```text
+SNMP v2c
+```
+
+แต่ Architecture ต้องออกแบบให้สามารถเพิ่ม:
+
+```text
+SNMP v3
+```
+
+ได้โดยไม่ Rewrite Core Classification Logic
+
+ตัวอย่าง:
+
+```text
+verification/
+└── snmp/
+    ├── base.py
+    ├── snmp_v2.py
+    └── snmp_v3.py
+```
+
+SNMP Credential ห้าม Hardcode ใน Source Code
+
+ห้ามแสดง Sensitive Credential ใน Log
+
+---
+
+# 19. Estimated Boot Time
+
+คำนวณ:
+
+```text
+Estimated Boot Time
+=
+SNMP Checked Time
+-
+Router Uptime
+```
+
+ตัวอย่าง:
+
+```text
+SNMP Checked:
+20:07:40
+
+Router Uptime:
+00:06:45
+
+Estimated Boot:
+20:00:55
+```
+
+เก็บ:
+
+```text
+router_uptime_seconds
+estimated_boot_time
+snmp_checked_at
+```
+
+---
+
+# 20. Router Uptime Threshold
+
+ให้สร้าง Configuration:
+
+```text
+ROUTER_REBOOT_THRESHOLD_SECONDS
+```
+
+Default:
+
+```text
+3600
+```
+
+หรือ 1 ชั่วโมง
+
+ห้าม Hardcode Magic Number ใน Business Logic
+
+---
+
+# 21. Case A — Uptime < 1 Hour
+
+ถ้า:
+
+```text
+router_uptime_seconds < ROUTER_REBOOT_THRESHOLD_SECONDS
+```
+
+ให้ Classification เบื้องต้น:
+
+```text
+DEVICE_REBOOT_SUSPECTED
+```
+
+แต่ห้ามสรุปว่า Reboot เกี่ยวข้องกับ Incident ทันที
+
+ต้องทำ Time Correlation ก่อน
+
+---
+
+# 22. Boot Time Correlation
+
+สร้าง Configuration:
+
+```text
+REBOOT_TIME_TOLERANCE_SECONDS
+```
+
+Default:
+
+```text
+300
+```
+
+หรือ ±5 นาที
+
+เปรียบเทียบ:
+
+```text
+Estimated Boot Time
+```
+
+กับ:
+
+```text
+Incident Down Time
+```
+
+ถ้า Estimated Boot Time อยู่ในช่วง:
+
+```text
+Down Time ± REBOOT_TIME_TOLERANCE_SECONDS
+```
+
+ให้:
+
+```text
+Classification:
+DEVICE_REBOOT_RELATED
+
+Confidence:
+HIGH
+```
+
+---
+
+# 23. Uptime < 1 Hour แต่ Time ไม่ Match
+
+ถ้า Uptime < 1 Hour
+
+แต่ Estimated Boot Time ไม่สัมพันธ์กับ Down Time
+
+ให้:
+
+```text
+Classification:
+DEVICE_REBOOT_SUSPECTED
+```
+
+Confidence:
+
+```text
+LOW
+```
+
+หรือ
+
+```text
+MEDIUM
+```
+
+ตาม Rule ที่กำหนดไว้อย่างชัดเจน
+
+ห้ามสรุปว่า Reboot เป็น Root Cause
+
+---
+
+# 24. Case B — Uptime >= 1 Hour
+
+ถ้า:
+
+```text
+router_uptime_seconds >= ROUTER_REBOOT_THRESHOLD_SECONDS
+```
+
+ให้:
+
+```text
+Classification:
+CONNECTIVITY_LOSS
+```
+
+ความหมายคือ:
+
+ไม่มี Evidence ว่า Router Reboot ในช่วง Incident
+
+เหตุการณ์จึงควรเข้าสู่ Connectivity Analysis Flow ในอนาคต
+
+แต่ Version นี้ยังไม่ต้อง Implement Flow ต่อไป
+
+---
+
+# 25. Important Classification Rule
+
+ห้ามสรุป:
+
+```text
+Router Uptime > 1 Hour
+=
+All Links Down
+```
+
+เพราะ sysUpTime ไม่สามารถพิสูจน์ได้ว่า Link เสียทั้งหมด
+
+ให้ใช้คำว่า:
+
+```text
+CONNECTIVITY_LOSS
+```
+
+เท่านั้นใน Version นี้
+
+---
+
+# 26. FACT vs INFERENCE
+
+ระบบต้องแยก FACT กับ INFERENCE
+
+## FACT
+
+ตัวอย่าง:
+
+```text
+Reachability DOWN
+Reachability UP
+SNMP sysUpTime
+Down Time
+Up Time
+SNMP Check Time
+Estimated Boot Time
+```
+
+## INFERENCE
+
+ตัวอย่าง:
+
+```text
+DEVICE_REBOOT_RELATED
+DEVICE_REBOOT_SUSPECTED
+CONNECTIVITY_LOSS
+UNABLE_TO_VERIFY
+```
+
+Database และ UI ต้องสามารถแสดง Evidence และ Classification แยกกัน
+
+---
+
+# 27. SNMP Failure
+
+ถ้า UP แล้วแต่ SNMP Query ไม่สำเร็จ
+
+ห้ามปิด Incident
+
+ให้:
+
+```text
+Status:
+VERIFICATION_FAILED
+```
+
+บันทึก:
+
+```text
+Error
+Attempt Number
+Verification Time
+```
+
+ระบบต้องรองรับ Retry
+
+---
+
+# 28. Retry Configuration
+
+สร้าง Configuration:
+
+```text
+SNMP_VERIFY_MAX_RETRIES
+SNMP_VERIFY_RETRY_DELAY
+```
+
+ห้าม Hardcode ค่าไว้หลายตำแหน่ง
+
+---
+
+# 29. Retry Exhausted
+
+ถ้า Retry ครบแล้วยังไม่สำเร็จ
+
+ให้:
+
+```text
+Classification:
+UNABLE_TO_VERIFY
+```
+
+และ:
+
+```text
+Status:
+MANUAL_REVIEW_REQUIRED
+```
+
+ห้ามเดาว่าเป็น:
+
+```text
+CONNECTIVITY_LOSS
+```
+
+หรือ:
+
+```text
+DEVICE_REBOOT_RELATED
+```
+
+---
+
+# 30. Incident Status
+
+Version แรกใช้ Status อย่างน้อย:
+
+```text
+DOWN
+
+RECOVERY_CHECK
+
+RECOVERED
+
+VERIFICATION_FAILED
+
+MANUAL_REVIEW_REQUIRED
+```
+
+Classification ต้องแยกจาก Status
+
+ตัวอย่าง:
+
+```text
+Status:
+RECOVERED
+
+Classification:
+DEVICE_REBOOT_RELATED
+```
+
+---
+
+# 31. Generic Event Model
+
+ออกแบบ Generic Event Entity เช่น:
+
+```text
+NetworkEvent
+------------
+id
+
+source
+source_event_id
+
+device
+
+event_type
+event_status
+severity
+
+event_time
+received_time
+
+message
+
+metadata
+raw_payload
+
+created_at
+```
+
+Core Logic ต้องใช้ Entity นี้
+
+---
+
+# 32. Event Source Model
+
+สร้าง Concept:
+
+```text
+EventSource
+-----------
+id
+name
+source_type
+enabled
+created_at
+updated_at
+```
+
+ตัวอย่าง:
+
+```text
+PRTG
+SYSLOG
+NMS
+EMS
+CUSTOM_API
+```
+
+Version แรกอาจมีเพียง PRTG
+
+---
+
+# 33. Device Model
+
+Device ต้องเป็น Core Entity ไม่ผูกกับ PRTG
+
+ตัวอย่าง:
+
+```text
+Device
+------
+id
+name
+management_ip
+device_type
+enabled
+
+created_at
+updated_at
+```
+
+Source-specific Device ID ให้เก็บแยกจาก Device Core Model
+
+---
+
+# 34. Source Device Mapping
+
+ควรมี Mapping Layer ระหว่าง External Source กับ Internal Device
+
+Concept:
+
+```text
+SourceDeviceMapping
+-------------------
+source
+source_device_id
+device
+metadata
+```
+
+ตัวอย่าง:
+
+```text
+PRTG Device ID 1001
+       |
+       v
+Internal Device
+BKK-PE-01
+```
+
+เพื่อให้ในอนาคต Device เดียวสามารถมี Reference จากหลาย Source ได้
+
+---
+
+# 35. Incident Model
+
+Incident ต้องไม่ผูกกับ PRTG Sensor โดยตรง
+
+Concept:
+
+```text
+Incident
+--------
+id
+incident_number
+
+primary_device
+
+status
+classification
+confidence
+
+down_time
+up_time
+last_seen
+
+created_at
+updated_at
+```
+
+---
+
+# 36. Incident and Event Relationship
+
+Incident หนึ่งต้องเชื่อมกับ Event ได้หลายรายการ
+
+และ Event เหล่านั้นอาจมาจากหลาย Source
+
+ตัวอย่าง:
+
+```text
+INC-20260925-000001
+
+Device:
+BKK-PE-01
+
+Events:
+├── PRTG Reachability DOWN
+├── NMS Interface Alarm
+├── Syslog BGP Lost
+└── EMS Transmission Alarm
+```
+
+Version แรกอาจมีเฉพาะ Event จาก PRTG
+
+แต่ Data Model ต้องรองรับ Multi-Source ตั้งแต่ต้น
+
+---
+
+# 37. Incident Event Mapping
+
+สร้าง Concept:
+
+```text
+IncidentEvent
+-------------
+incident
+event
+relationship_type
+created_at
+```
+
+ในอนาคต relationship_type อาจใช้:
+
+```text
+PRIMARY
+RELATED
+SUPPORTING
+RECOVERY
+```
+
+Version แรกยังไม่จำเป็นต้องใช้ทุกค่า
+
+---
+
+# 38. Verification Model
+
+Verification ควรเป็น Generic Concept
+
+ตัวอย่าง:
+
+```text
+Verification
+------------
+id
+incident
+device
+
+verification_type
+status
+
+check_time
+
+result
+evidence
+error_message
+
+attempt_number
+
+created_at
+```
+
+SNMP sysUpTime เป็น Verification Type แรก:
+
+```text
+SNMP_SYSUPTIME
+```
+
+เพื่อให้ในอนาคตสามารถเพิ่ม:
+
+```text
+PING
+SSH
+API
+INTERFACE_CHECK
+ROUTING_CHECK
+```
+
+ได้โดยไม่รื้อ Model
+
+---
+
+# 39. Event Timeline
+
+Incident ต้องมี Timeline
+
+ตัวอย่าง:
+
+```text
+19:30:12 DOWN
+19:31:12 DOWN_REPEAT
+19:36:42 UP_RECEIVED
+19:36:43 SNMP_VERIFY_START
+19:36:44 SNMP_VERIFY_SUCCESS
+19:36:44 CLASSIFICATION_COMPLETED
+19:36:44 RECOVERED
+```
+
+Timeline ต้องรองรับ Source ของ Event ด้วย
+
+---
+
+# 40. PRTG Endpoint
+
+Version แรกให้สร้าง Endpoint เช่น:
+
+```text
+POST /api/v1/integrations/prtg/events/
+```
+
+Payload Concept:
+
+```json
+{
+  "device": "BKK-PE-01",
+  "host": "10.10.10.1",
+  "device_id": "1001",
+  "sensor_id": "2001",
+  "sensor": "Ping",
+  "status": "DOWN",
+  "datetime": "2026-09-25T20:01:10+07:00",
+  "message": "Request timed out"
+}
+```
+
+PRTG Adapter ต้อง Convert Payload นี้เป็น Normalized Event
+
+---
+
+# 41. Future Generic Ingestion
+
+Architecture ต้องสามารถเพิ่ม Endpoint ในอนาคต เช่น:
+
+```text
+/api/v1/integrations/nms/events/
+
+/api/v1/integrations/syslog/events/
+
+/api/v1/integrations/ems/events/
+```
+
+หรือ Generic Ingestion API หากภายหลังมี Requirement
+
+แต่ยังไม่ต้อง Implement ตอนนี้
+
+---
+
+# 42. Integration Security
+
+แต่ละ Event Source ต้องสามารถมี Security Configuration แยกกันได้
+
+เช่น:
+
+```text
+API Key
+Shared Secret
+Source IP Allowlist
+Authentication Header
+```
+
+PRTG Version แรกสามารถใช้:
+
+```text
+X-PRTG-Token
+```
+
+Credential ห้าม Hardcode
+
+---
+
+# 43. Idempotency
+
+Event Source แต่ละระบบอาจส่ง Event ซ้ำ
+
+ระบบต้องมี Generic Idempotency Strategy
+
+เช่น:
+
+```text
+source
+source_event_id
+event_type
+event_status
+event_time
+device
+```
+
+หรือ Hash ที่เหมาะสม
+
+ห้ามออกแบบ Idempotency ให้ใช้ได้เฉพาะ PRTG
+
+---
+
+# 44. Event Ordering
+
+ระบบต้องเผื่อกรณี Event มาไม่ตรงลำดับ เช่น:
+
+```text
+UP มาถึงก่อน DOWN
+
+Duplicate Event
+
+Delayed Event
+
+Late Event
+
+Same Event Retransmission
+```
+
+ต้องออกแบบให้ Audit ได้และไม่ทำ State เสีย
+
+ยังไม่ต้องสร้าง Complex Correlation Engine ใน Version นี้
+
+---
+
+# 45. Time Handling
+
+ใช้ Timezone-aware Datetime
+
+ห้ามใช้ naive datetime
+
+Internal Time Strategy ต้องชัดเจน
+
+Frontend สามารถแสดง:
+
+```text
+Asia/Bangkok
+```
+
+หรือ Configurable Timezone
+
+---
+
+# 46. Incident Number
+
+ใช้รูปแบบอ่านง่าย เช่น:
+
+```text
+INC-20260925-000001
+```
+
+ต้อง:
+
+- Unique
+- Concurrent-safe
+- ไม่ขึ้นกับ Event Source
+
+---
+
+# 47. Database Technology
+
+My Architecture ยังไม่ได้กำหนด Database
+
+ก่อน Implement Database Layer ให้:
+
+1. ประเมิน Requirement
+2. เสนอ Database Technology
+3. อธิบายเหตุผล
+4. อธิบายข้อดีข้อเสีย
+5. อธิบาย Django ORM Integration
+6. อธิบาย Multi-Source Event Impact
+7. รอการอนุมัติ
+
+ห้ามเลือกเองโดยอัตโนมัติ
+
+---
+
+# 48. Background Processing
+
+SNMP Verification ไม่ควรทำให้ Source HTTP Request รอนาน
+
+ให้ประเมินความจำเป็นของ:
+
+```text
+Background Worker
+Task Queue
+Message Broker
+```
+
+ถ้าจำเป็น:
+
+ให้เสนอ Architecture ก่อน
+
+ห้ามเพิ่ม Technology เองโดยไม่ได้รับอนุมัติ
+
+Target Flow:
+
+```text
+External Source
+     |
+     v
+HTTP Event
+     |
+     v
+Django
+     |
+     +--> Validate
+     |
+     +--> Normalize
+     |
+     +--> Store Event
+     |
+     +--> Return Response
+     |
+     +--> Verification / Processing
+```
+
+---
+
+# 49. Backend Responsibilities
+
+Django รับผิดชอบ:
+
+- Integration APIs
+- Source Adapters
+- Event Validation
+- Event Normalization
+- Device Mapping
+- Event Storage
+- Incident State
+- Duplicate Detection
+- Verification
+- SNMP sysUpTime Check
+- Classification
+- Audit
+- REST API สำหรับ Frontend
+
+---
+
+# 50. Frontend Responsibilities
+
+React Frontend มีหน้าที่แสดงผล
+
+Version แรกสร้างอย่างน้อย:
+
+## Current Incidents
+
+แสดง:
+
+```text
+Incident Number
+Device
+IP
+Source
+Down Since
+Duration
+Status
+```
+
+## Recovery Check
+
+แสดง:
+
+```text
+RECOVERY_CHECK
+VERIFICATION_FAILED
+MANUAL_REVIEW_REQUIRED
+```
+
+## Recent Recovered
+
+แสดง:
+
+```text
+Incident Number
+Device
+Down Time
+Up Time
+Downtime
+Router Uptime
+Classification
+Confidence
+```
+
+## Incident Detail
+
+แสดง:
+
+```text
+Device Information
+
+Event Sources
+
+Down Time
+Up Time
+Downtime
+
+Evidence
+
+SNMP Verification
+
+Router Uptime
+Estimated Boot Time
+
+Classification
+Confidence
+
+Event Timeline
+```
+
+---
+
+# 51. UI Principle
+
+ใช้:
+
+```text
+React
+TypeScript
+Vite
+Tailwind CSS
+shadcn/ui
+```
+
+UI ต้อง:
+
+- Responsive
+- อ่านง่าย
+- เหมาะกับ Network Operation
+- แสดง Source ของ Event
+- แสดง Status ชัดเจน
+- แสดง Evidence แยกจาก Classification
+
+ห้ามใช้สีเพียงอย่างเดียวเพื่อสื่อ Status
+
+---
+
+# 52. Logging
+
+ใช้ Structured Logging
+
+ควรมี Event เช่น:
+
+```text
+SOURCE_EVENT_RECEIVED
+
+SOURCE_EVENT_REJECTED
+
+EVENT_NORMALIZED
+
+EVENT_STORED
+
+DUPLICATE_EVENT_DETECTED
+
+DEVICE_MATCHED
+
+INCIDENT_CREATED
+
+INCIDENT_MATCHED
+
+UP_RECEIVED
+
+VERIFICATION_STARTED
+
+VERIFICATION_SUCCESS
+
+VERIFICATION_FAILED
+
+CLASSIFICATION_COMPLETED
+
+INCIDENT_RECOVERED
+```
+
+Log ควรมี:
+
+```text
+source
+event_id
+incident_id
+device
+```
+
+เมื่อมีข้อมูล
+
+---
+
+# 53. Raw Payload Audit
+
+Raw Payload ต้องสามารถเก็บเพื่อ Audit
+
+แต่:
+
+- ต้อง Sanitize Sensitive Data
+- ต้องแยก Raw Source Data ออกจาก Normalized Event
+- ต้องรองรับ Data Retention Policy ในอนาคต
+
+---
+
+# 54. REST API
+
+สร้าง Concept อย่างน้อย:
+
+```text
+GET /api/v1/incidents/
+
+GET /api/v1/incidents/{id}/
+
+GET /api/v1/incidents/{id}/events/
+
+GET /api/v1/devices/
+
+GET /api/v1/events/
+
+GET /api/v1/event-sources/
+
+POST /api/v1/integrations/prtg/events/
+```
+
+API Format ต้อง Consistent
+
+---
+
+# 55. Example — Reboot Related
+
+ข้อมูล:
+
+```text
+Source:
+PRTG
+
+Event:
+DEVICE_REACHABILITY DOWN
+
+Down:
+20:01:10
+
+UP:
+20:07:35
+
+SNMP Check:
+20:07:40
+
+Router Uptime:
+00:06:45
+
+Estimated Boot:
+20:00:55
+```
+
+ผล:
+
+```text
+Status:
+RECOVERED
+
+Classification:
+DEVICE_REBOOT_RELATED
+
+Confidence:
+HIGH
+```
+
+---
+
+# 56. Example — Connectivity Loss
+
+```text
+Source:
+PRTG
+
+Down:
+20:01:10
+
+Up:
+20:07:35
+
+Router Uptime:
+37 Days
+```
+
+ผล:
+
+```text
+Status:
+RECOVERED
+
+Classification:
+CONNECTIVITY_LOSS
+```
+
+ความหมาย:
+
+```text
+No evidence of router reboot during incident
+```
+
+ยังไม่สรุป Root Cause
+
+---
+
+# 57. Example — Unable to Verify
+
+```text
+UP Event Received
+
+SNMP Timeout
+
+Retry Failed
+```
+
+ผล:
+
+```text
+Status:
+MANUAL_REVIEW_REQUIRED
+
+Classification:
+UNABLE_TO_VERIFY
+```
+
+---
+
+# 58. What NOT to Implement Yet
+
+ห้าม Implement:
+
+```text
+Event Correlation Across Multiple Sources
+
+Automatic Root Cause Correlation
+
+Interface Analysis
+
+Physical Link Analysis
+
+Transmission Analysis
+
+Routing Analysis
+
+BGP Analysis
+
+OSPF Analysis
+
+IS-IS Analysis
+
+MPLS Analysis
+
+VRF Analysis
+
+Power Analysis
+
+Router Log Analysis
+
+Syslog Root Cause Analysis
+
+AI Root Cause Analysis
+
+Historical Incident Matching
+
+Automatic RCA
+
+SLA Calculation
+
+Teams Notification
+
+Telegram Notification
+
+Email Notification
+
+Escalation
+
+Ticketing Integration
+
+Automatic Remediation
+```
+
+Multi-Source Foundation ต้องรองรับ Feature เหล่านี้ได้ในอนาคต
+
+แต่ยังไม่ต้อง Implement
+
+---
+
+# 59. Future Architecture Direction
+
+ในอนาคตระบบอาจพัฒนาไปเป็น:
+
+```text
+PRTG
+NMS
+EMS
+Syslog
+SNMP Trap
+Transmission
+Security System
+Custom APIs
+        |
+        v
+Integration Adapters
+        |
+        v
+Normalized Event Layer
+        |
+        v
+Event Engine
+        |
+        v
+Incident Engine
+        |
+        v
+Correlation Engine
+        |
+        v
+Verification
+        |
+        v
+Root Cause Analysis
+        |
+        v
+AI Analysis
+        |
+        v
+Notification / Ticket / RCA
+```
+
+แต่ Version แรกจบที่:
+
+```text
+Event
+   |
+   v
+Incident
+   |
+   v
+SNMP Verification
+   |
+   v
+Reboot vs Connectivity Classification
+```
+
+---
+
+# 60. Testing Requirements
+
+สร้าง Automated Tests อย่างน้อย:
+
+1. PRTG DOWN Event
+2. PRTG Duplicate DOWN
+3. PRTG UP หลัง DOWN
+4. UP Without Active Incident
+5. Duplicate UP
+6. Event Normalization
+7. Source Metadata Preservation
+8. Device Mapping
+9. Duplicate Event Detection
+10. Concurrent DOWN
+11. SNMP Uptime < 1 Hour
+12. SNMP Uptime >= 1 Hour
+13. Boot Time Match
+14. Boot Time Outside Tolerance
+15. SNMP Timeout
+16. Retry Success
+17. Retry Exhausted
+18. Invalid Integration Token
+19. Invalid Payload
+20. Timezone Handling
+21. Event Source Separation
+22. Core Logic ไม่พึ่ง PRTG-specific Field
+
+---
+
+# 61. Critical Architecture Test
+
+ต้องมี Test หรือ Design Validation ว่า:
+
+Core Incident Logic สามารถทำงานกับ Normalized Event โดยไม่ต้องรู้ว่า Source คือ PRTG
+
+ตัวอย่าง Test:
+
+สร้าง Normalized Event จาก Mock Source:
+
+```text
+source = TEST_NMS
+
+event_type = DEVICE_REACHABILITY
+
+event_status = DOWN
+```
+
+Core Engine ต้องสามารถสร้าง Incident ได้เหมือน Event ที่มาจาก PRTG
+
+นี่เป็น Requirement สำคัญ
+
+---
+
+# 62. Development Approach
+
+ให้ทำงานตามลำดับ:
+
+## Phase 1 — Discovery
+
+ตรวจสอบ Existing Project ก่อน
+
+ถ้ามีระบบเดิม:
+
+- Analyze Existing Django
+- Analyze Existing React
+- Analyze Existing Docker
+- Analyze Existing Database
+- Analyze Existing Integration
+- Analyze Existing Authentication
+- Analyze Existing Coding Convention
+
+ห้าม Rewrite ระบบเดิมโดยไม่จำเป็น
+
+---
+
+# 63. Phase 2 — Design Only
+
+รอบแรกให้ทำ:
+
+1. Requirement Summary
+2. Multi-Source Architecture
+3. Integration Adapter Design
+4. Normalized Event Schema
+5. Device Mapping Design
+6. Data Model
+7. Event Model
+8. Incident Model
+9. Verification Model
+10. State Machine
+11. PRTG Event Flow
+12. SNMP Verification Flow
+13. Classification Logic
+14. Idempotency Strategy
+15. Event Ordering Strategy
+16. Security Design
+17. API Design
+18. Database Proposal
+19. Background Processing Proposal
+20. Test Plan
+21. Edge Cases
+22. Open Decisions
+
+ยังไม่ต้อง Implement Code
+
+---
+
+# 64. Phase 3 — Implementation
+
+หลัง Design ได้รับการอนุมัติแล้ว
+
+จึงค่อย Implement:
+
+```text
+Integration Framework
+
+PRTG Adapter
+
+Normalized Event Layer
+
+Device Mapping
+
+Event Storage
+
+Incident Engine
+
+SNMP Verification
+
+Classification
+
+REST API
+
+React Dashboard
+
+Automated Tests
+
+Docker Integration
+```
+
+---
+
+# 65. Coding Principles
+
+ใช้:
+
+- Clean Code
+- Modular Architecture
+- Separation of Concerns
+- Adapter Pattern
+- Service Layer
+- Type Hints
+- Secure Configuration
+- Environment-based Configuration
+- Idempotent Processing
+- Transaction Safety
+- Testable Components
+- Clear Naming
+- Unit Tests
+- Integration Tests
+
+ห้ามใส่ Business Logic จำนวนมากไว้ใน:
+
+- Django View
+- Django Serializer
+- Source Adapter
+- React Component
+
+Source Adapter มีหน้าที่หลัก:
+
+```text
+Validate
+Parse
+Normalize
+```
+
+ไม่ใช่ Incident Processing
+
+---
+
+# 66. Non-Regression Rule
+
+การเพิ่ม Event Source หรือ Analysis Flow ใหม่ในอนาคตต้อง:
+
+- ไม่ทำให้ PRTG Integration เดิมเสีย
+- ไม่เปลี่ยน Core Contract โดยไม่จำเป็น
+- ไม่ Rewrite Incident Engine
+- ใช้ Existing Normalized Event Contract
+- เพิ่ม Adapter หรือ Module ใหม่แทนการแก้ระบบเกินความจำเป็น
+
+---
+
+# 67. Configuration
+
+Business Threshold ต้อง Configure ได้
+
+ตัวอย่าง:
+
+```text
+ROUTER_REBOOT_THRESHOLD_SECONDS=3600
+
+REBOOT_TIME_TOLERANCE_SECONDS=300
+
+SNMP_VERIFY_MAX_RETRIES=<configured>
+
+SNMP_VERIFY_RETRY_DELAY=<configured>
+```
+
+Source Configuration ต้องแยกจาก Core Configuration
+
+ตัวอย่าง:
+
+```text
+PRTG_ENABLED=true
+
+PRTG_API_TOKEN=<secret>
+```
+
+ในอนาคตสามารถเพิ่ม:
+
+```text
+NMS_ENABLED=true
+
+SYSLOG_ENABLED=true
+```
+
+โดยไม่กระทบ Core Configuration
+
+---
+
+# 68. Source of Truth
+
+ให้ถือ Prompt นี้เป็น Source of Truth สำหรับ Version แรก
+
+หากพบ Requirement ไม่ชัดเจน:
+
+- ห้ามเดา Business Rule
+- ห้ามเพิ่ม Root Cause Logic เอง
+- ให้ระบุ Assumption
+- ให้ Design ให้ Rule สามารถเปลี่ยนได้ง่าย
+- รักษา Multi-Source Architecture
+
+---
+
+# 69. Version 1 Boundary
+
+Version แรกต้องจบที่:
+
+```text
+PRTG
+   |
+   v
+PRTG Adapter
+   |
+   v
+Normalized Event
+   |
+   v
+Core Event Engine
+   |
+   v
+Incident
+   |
+   v
+SNMP Verification
+   |
+   +-----------------------+
+   |                       |
+   v                       v
+Reboot-related       Connectivity Loss
+   |
+   v
+Store Evidence
+Store Classification
+Display Dashboard
+```
+
+ห้ามทำ Root Cause Analysis ต่อ
+
+---
+
+# 70. Expected Deliverables
+
+หลัง Design ได้รับอนุมัติ ให้ส่งมอบ:
+
+1. Multi-Source Architecture Diagram
+2. Integration Adapter Design
+3. Event Flow Diagram
+4. Sequence Diagram
+5. State Machine
+6. Normalized Event Schema
+7. Device Mapping Design
+8. Data Model / ER Diagram
+9. Incident Model
+10. Verification Model
+11. PRTG Adapter Specification
+12. SNMP Service Design
+13. Classification Logic
+14. Django Backend
+15. React Frontend
+16. Docker Configuration
+17. Database Configuration หลังได้รับอนุมัติ
+18. Background Processing Configuration หลังได้รับอนุมัติ
+19. Automated Tests
+20. `.env.example`
+21. README
+22. API Documentation
+23. PRTG HTTP Notification Example
+24. Troubleshooting Guide
+25. Future Source Integration Guide
+26. Future Extension Points
+
+---
+
+# 71. Start Instruction
+
+เริ่มงานจาก:
+
+```text
+DISCOVERY AND DESIGN ONLY
+```
+
+ในรอบแรกให้ทำเฉพาะ:
+
+1. สรุป Requirement
+2. วิเคราะห์ Existing System
+3. เสนอ Multi-Source Architecture
+4. ออกแบบ Source Adapter Pattern
+5. ออกแบบ Normalized Event Contract
+6. ออกแบบ Device Mapping
+7. ออกแบบ Data Model
+8. ออกแบบ Incident State Machine
+9. ออกแบบ PRTG Integration
+10. ออกแบบ SNMP Verification
+11. ออกแบบ Classification
+12. ออกแบบ Idempotency
+13. ออกแบบ Event Ordering
+14. ออกแบบ Security
+15. เสนอ Database ถ้าจำเป็น
+16. เสนอ Background Processing ถ้าจำเป็น
+17. ระบุ Edge Cases
+18. ระบุ Open Decisions
+19. ระบุผลกระทบต่อ Existing System
+20. จัดทำ Implementation Plan
+
+ยังไม่ต้อง Implement Code
+
+ห้ามเพิ่ม Technology ที่ไม่ได้อยู่ใน My Architecture โดยไม่ได้รับการอนุมัติก่อน
+
+ห้ามทำให้ Core System ผูกกับ PRTG
+
+PRTG ต้องเป็นเพียง Integration Adapter แรกของ Platform
+
+เป้าหมายคือสร้าง Foundation สำหรับ:
+
+Multi-Source Network Event
+→ Normalization
+→ Incident Tracking
+→ Verification
+→ Classification
+
+ที่สามารถเพิ่ม Event Source และ Root Cause Flow ใหม่ในอนาคตได้โดยไม่ต้อง Rewrite Core Platform

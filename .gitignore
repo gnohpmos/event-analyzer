@@ -1,0 +1,63 @@
+# Environment & Secret files
+.env
+*.env
+!.env.example
+
+# Database & Persistent Volume data
+data/
+*.sqlite3
+*.db
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Static files collected by Django
+backend/staticfiles/
+
+# Node.js & Frontend dependencies/build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs & Temporary files
+*.log
+logs/
+*.pid
+
+# IDE & OS specific files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# AI agent local cache
+.agents/
