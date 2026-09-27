@@ -59,8 +59,12 @@ def _parse_request_payload(request) -> dict:
 
 def _extract_token(request, payload: dict) -> str:
     """Extract authentication token from header, query string, or payload."""
+    auth_header = request.headers.get('Authorization', '')
+    bearer_token = auth_header[7:].strip() if auth_header.startswith('Bearer ') else ''
+
     return (
         request.headers.get('X-PRTG-Token') or
+        bearer_token or
         request.GET.get('token') or
         payload.get('token', '')
     )

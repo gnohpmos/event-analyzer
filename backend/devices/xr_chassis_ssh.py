@@ -8,6 +8,7 @@ import re
 import time
 from typing import Optional, Dict, Any
 from common.settings_helper import get_setting
+from common.ssh_client import ManagedSSHClient
 
 logger = logging.getLogger(__name__)
 
@@ -73,15 +74,6 @@ def fetch_xr_chassis_ssh(
         logger.warning(f"SSH_XR_INVENTORY: No SSH password configured for host={host}")
         return {'success': False, 'error': 'No SSH password configured'}
 
-    try:
-        import paramiko
-    except ImportError:
-        logger.error("SSH_XR_INVENTORY: paramiko not installed")
-        return {'success': False, 'error': 'Paramiko not installed'}
-
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
     if is_32bit:
         commands = [
             "admin show inventory chassis",
@@ -98,70 +90,46 @@ def fetch_xr_chassis_ssh(
         ]
 
     try:
-        logger.info(f"SSH_XR_INVENTORY_CONNECT: Connecting to {host}:{port} as '{user}' for chassis inventory (32bit={is_32bit})")
-        client.connect(
-            hostname=host,
-            port=port,
-            username=user,
-            password=pwd,
-            timeout=timeout,
-            banner_timeout=timeout,
-            auth_timeout=timeout,
-            look_for_keys=False,
-            allow_agent=False
-        )
+        with ManagedSSHClient(host=host, username=user, password=pwd, port=port, timeout=timeout) as ssh:
+            chan = ssh.open_interactive_shell(term='vt100', width=256, height=100)
 
-        chan = client.invoke_shell(term='vt100', width=256, height=100)
-        chan.settimeout(timeout)
-        time.sleep(1.2)
+            parsed = {'model': None, 'serial': None, 'descr': None, 'vid': None}
+            output = ''
+            used_cmd = commands[0]
 
-        # Flush initial banner
-        while chan.recv_ready():
-            chan.recv(65535)
+            for cmd in commands:
+                chan.send(cmd + '\n')
+                cmd_out = ''
+                start_t = time.time()
+                while (time.time() - start_t) < 3.0:
+                    if chan.recv_ready():
+                        chunk = chan.recv(65535).decode('utf-8', errors='ignore')
+                        cmd_out += chunk
+                        if 'PID:' in cmd_out and 'SN:' in cmd_out:
+                            break
+                    time.sleep(0.2)
 
-        parsed = {'model': None, 'serial': None, 'descr': None, 'vid': None}
-        output = ''
-        used_cmd = commands[0]
+                res = parse_chassis_inventory(cmd_out)
+                if res['model'] or res['serial']:
+                    parsed = res
+                    output = cmd_out
+                    used_cmd = cmd
+                    break
 
-        for cmd in commands:
-            chan.send(cmd + '\n')
-            cmd_out = ''
-            start_t = time.time()
-            while (time.time() - start_t) < 3.0:
-                if chan.recv_ready():
-                    chunk = chan.recv(65535).decode('utf-8', errors='ignore')
-                    cmd_out += chunk
-                    if 'PID:' in cmd_out and 'SN:' in cmd_out:
-                        break
-                time.sleep(0.2)
-
-            res = parse_chassis_inventory(cmd_out)
-            if res['model'] or res['serial']:
-                parsed = res
-                output = cmd_out
-                used_cmd = cmd
-                break
-
-        client.close()
-
-        success = bool(parsed['serial'] or parsed['model'])
-        logger.info(
-            f"SSH_XR_INVENTORY_RESULT: host={host} success={success} cmd='{used_cmd}' model={parsed['model']} serial={parsed['serial']}"
-        )
-        return {
-            'success': success,
-            'model': parsed['model'],
-            'serial': parsed['serial'],
-            'descr': parsed['descr'],
-            'vid': parsed['vid'],
-            'command_used': used_cmd,
-            'raw_output': output[:1000]
-        }
+            success = bool(parsed['serial'] or parsed['model'])
+            logger.info(
+                f"SSH_XR_INVENTORY_RESULT: host={host} success={success} cmd='{used_cmd}' model={parsed['model']} serial={parsed['serial']}"
+            )
+            return {
+                'success': success,
+                'model': parsed['model'],
+                'serial': parsed['serial'],
+                'descr': parsed['descr'],
+                'vid': parsed['vid'],
+                'command_used': used_cmd,
+                'raw_output': output[:1000]
+            }
 
     except Exception as e:
         logger.warning(f"SSH_XR_INVENTORY_FAILED on {host}: {e}")
-        try:
-            client.close()
-        except Exception:
-            pass
         return {'success': False, 'error': str(e)}

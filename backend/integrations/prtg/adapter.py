@@ -153,7 +153,7 @@ class PRTGAdapter(BaseSourceAdapter):
 
         # Device identification
         device_name = raw_payload.get('device', '').strip()
-        device_ip = raw_payload.get('host', '').strip()
+        device_ip = (raw_payload.get('host') or raw_payload.get('ip') or '').strip()
         if not device_name:
             device_name = device_ip
 

@@ -12,6 +12,7 @@ from common.constants import (
 )
 from devices.models import Device
 from events.models import NetworkEvent
+from common.sequence_generator import IncidentNumberFactory
 from incidents.models import Incident, IncidentEvent, EventTimeline
 
 logger = logging.getLogger(__name__)
@@ -20,25 +21,9 @@ logger = logging.getLogger(__name__)
 def generate_incident_number() -> str:
     """
     Generate human-readable incident number: INC-YYYYMMDD-NNNNNN.
-    Uses select_for_update to ensure concurrent safety.
+    Delegates to centralized IncidentNumberFactory.
     """
-    today = timezone.now().strftime('%Y%m%d')
-    prefix = f'INC-{today}-'
-
-    last = (
-        Incident.objects
-        .filter(incident_number__startswith=prefix)
-        .select_for_update()
-        .order_by('-incident_number')
-        .first()
-    )
-
-    if last:
-        seq = int(last.incident_number.split('-')[-1]) + 1
-    else:
-        seq = 1
-
-    return f'{prefix}{seq:06d}'
+    return IncidentNumberFactory.generate(prefix_type='INC')
 
 
 def process_down_event(event: NetworkEvent, device: Device) -> dict:

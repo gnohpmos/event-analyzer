@@ -7,6 +7,7 @@ import re
 from typing import Optional, Dict, Any
 
 from common.settings_helper import get_setting
+from common.ssh_client import ManagedSSHClient
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ def get_xr_reboot_history(
 ) -> Dict[str, Any]:
     """
     Connects to Cisco IOS-XR device via SSH and runs 'show reboot-history'.
-    Falls back to 'show version' if needed.
+    Falls back to 'show version' if needed. Uses ManagedSSHClient.
     """
     user = username or get_setting('SSH_USERNAME', 'admin')
     pwd = password if password is not None else get_setting('SSH_PASSWORD', '')
@@ -107,71 +108,26 @@ def get_xr_reboot_history(
         }
 
     try:
-        import paramiko
-    except ImportError:
-        logger.error("SSH_XR_ERROR: paramiko is not installed")
-        return {
-            "success": False,
-            "host": host,
-            "error_message": "Paramiko library is not installed in runtime environment.",
-            "reason": None
-        }
+        with ManagedSSHClient(host=host, username=user, password=pwd, port=port, timeout=timeout) as ssh:
+            commands = ["show reboot-history", "admin show reboot-history", "show version"]
+            output, used_cmd = ssh.execute_with_fallback(commands)
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            parsed = parse_xr_reboot_history(output)
+            logger.info(
+                f"SSH_XR_SUCCESS: host={host} cmd='{used_cmd}' parsed_reason='{parsed['reason']}' category={parsed['category']}"
+            )
 
-    try:
-        logger.info(f"SSH_XR_CONNECT: Connecting to {host}:{port} as user '{user}' (timeout={timeout}s)")
-        client.connect(
-            hostname=host,
-            port=port,
-            username=user,
-            password=pwd,
-            timeout=timeout,
-            banner_timeout=timeout,
-            auth_timeout=timeout,
-            look_for_keys=False,
-            allow_agent=False
-        )
+            return {
+                "success": True,
+                "host": host,
+                "raw_output": output[:1000],
+                "parsed_reason": parsed["reason"],
+                "timestamp": parsed["timestamp"],
+                "category": parsed["category"],
+                "summary_line": parsed["summary_line"],
+                "error_message": None
+            }
 
-        # Run command 1: show reboot-history
-        stdin, stdout, stderr = client.exec_command("show reboot-history", timeout=timeout)
-        output = stdout.read().decode('utf-8', errors='ignore')
-
-        # If empty or syntax error on some platforms, fallback to show version
-        if not output or "invalid input" in output.lower():
-            logger.info(f"SSH_XR_FALLBACK: 'show reboot-history' failed, trying 'admin show reboot-history'")
-            stdin, stdout, stderr = client.exec_command("admin show reboot-history", timeout=timeout)
-            output = stdout.read().decode('utf-8', errors='ignore')
-
-        if not output or "invalid input" in output.lower():
-            logger.info(f"SSH_XR_FALLBACK: trying 'show version'")
-            stdin, stdout, stderr = client.exec_command("show version", timeout=timeout)
-            output = stdout.read().decode('utf-8', errors='ignore')
-
-        parsed = parse_xr_reboot_history(output)
-        logger.info(f"SSH_XR_SUCCESS: host={host} parsed_reason='{parsed['reason']}' category={parsed['category']}")
-
-        return {
-            "success": True,
-            "host": host,
-            "raw_output": output[:1000],
-            "parsed_reason": parsed["reason"],
-            "timestamp": parsed["timestamp"],
-            "category": parsed["category"],
-            "summary_line": parsed["summary_line"],
-            "error_message": None
-        }
-
-    except paramiko.AuthenticationException:
-        err = f"SSH Authentication failed for user '{user}'"
-        logger.error(f"SSH_XR_AUTH_FAIL: host={host} user={user}")
-        return {
-            "success": False,
-            "host": host,
-            "error_message": err,
-            "reason": None
-        }
     except Exception as e:
         err = f"SSH connection error: {str(e)}"
         logger.error(f"SSH_XR_EXCEPTION: host={host} error={str(e)}")
@@ -181,8 +137,3 @@ def get_xr_reboot_history(
             "error_message": err,
             "reason": None
         }
-    finally:
-        try:
-            client.close()
-        except Exception:
-            pass

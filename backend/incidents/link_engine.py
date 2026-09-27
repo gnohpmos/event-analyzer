@@ -24,31 +24,15 @@ SOAK_DURATION_MINUTES = 45  # 45 minutes continuous UP required
 SOAK_COUNTDOWN_SECONDS = 2700  # 45 * 60 seconds
 
 
+from common.sequence_generator import IncidentNumberFactory
+
+
 def generate_link_incident_number() -> str:
     """
     Generate unique link incident number: LNK-YYYYMMDD-NNNNNN.
-    Concurrent-safe using select_for_update.
+    Delegates to centralized IncidentNumberFactory.
     """
-    today = timezone.now().strftime('%Y%m%d')
-    prefix = f'LNK-{today}-'
-
-    last = (
-        Incident.objects
-        .filter(incident_number__startswith=prefix)
-        .select_for_update()
-        .order_by('-incident_number')
-        .first()
-    )
-
-    if last:
-        try:
-            seq = int(last.incident_number.split('-')[-1]) + 1
-        except (ValueError, IndexError):
-            seq = 1
-    else:
-        seq = 1
-
-    return f'{prefix}{seq:06d}'
+    return IncidentNumberFactory.generate(prefix_type='LNK')
 
 
 def process_link_event(event: NetworkEvent, device: Device) -> dict:
