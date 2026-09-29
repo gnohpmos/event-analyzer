@@ -71,11 +71,11 @@ flowchart TD
     Redis --> CeleryWorker
     CeleryBeat --> Redis
 
-    CeleryWorker <-->|Query SNMP/SSH| Routers
-    CeleryWorker <-->|Query Interface Alarms| IPGET_IF
-    CeleryWorker <-->|Query Node Ping Alarms| IPGET_NODE
-    CeleryWorker <-->|Query TTS Tickets (NTID/IP)| TTS_API
-    CeleryWorker -->|Update Enriched Data| Postgres
+    CeleryWorker <-->|"Query SNMP / SSH"| Routers
+    CeleryWorker <-->|"Query Interface Alarms"| IPGET_IF
+    CeleryWorker <-->|"Query Node Ping Alarms"| IPGET_NODE
+    CeleryWorker <-->|"Query TTS Tickets (NTID or IP)"| TTS_API
+    CeleryWorker -->|"Update Enriched Data"| Postgres
 
     Postgres <--> Nginx
     Nginx <--> Frontend
@@ -110,7 +110,7 @@ sequenceDiagram
     Adapter-->>Webhook: Normalized Data Dictionary
     Webhook->>DB: บันทึก NetworkEvent (Audit Trail)
     Webhook->>Dispatcher: dispatch_event(event) (Non-blocking)
-    Webhook-->>PRTG: HTTP 200 OK {"status": "success"} (< 15ms)
+    Webhook-->>PRTG: HTTP 200 OK (Under 15ms)
 ```
 
 ### การสกัดข้อมูลและแปลงรูปแบบพอร์ต (Interface Normalization):
@@ -303,7 +303,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Incoming["Webhook PRTG ส่งเข้ามา"] --> AsyncSave["1. Non-Blocking Ingestion<br>บันทึก Incident และตอบ HTTP 200 ทันที (< 15ms)<br>ไม่รอผลของ IPGET/TTS ใน Webhook Request"]
+    Incoming["Webhook PRTG ส่งเข้ามา"] --> AsyncSave["1. Non-Blocking Ingestion<br>บันทึก Incident และตอบ HTTP 200 ทันที (Under 15ms)<br>ไม่รอผลของ IPGET/TTS ใน Webhook Request"]
     
     AsyncSave --> CeleryQueue["2. ส่งเข้า Celery Background Queue"]
     
@@ -336,14 +336,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph OldDesign["ดีไซน์เดิม (กินพื้นที่ ~300px)"]
-        OldRow["[ StatusBadge (ยาว) ]  [ Quick Action Select ]  (จัดวางแนวนอน)"]
+        OldRow["StatusBadge เดิม + Quick Action Select (จัดวางแนวนอน)"]
     end
 
     subgraph NewDesign["ดีไซน์ใหม่ (ประหยัดพื้นที่ เหลือ ~115px-125px)"]
-        NewStack["[ StatusBadge (Compact) ]<br/>↕ (จัดวางแนวตั้ง Stacking)<br/>[ Quick Action Select (Compact) ]"]
+        NewStack["StatusBadge (Compact)<br/>↕ (จัดวางแนวตั้ง Stacking)<br/>Quick Action Select (Compact)"]
     end
 
-    OldDesign -->|ลดพื้นที่แนวนอนลงกว่า 55%| NewDesign
+    OldDesign -->|"ลดพื้นที่แนวนอนลงกว่า 55%"| NewDesign
 ```
 
 ### 1. การปรับแต่งคอลัมน์ "Status & Action":
