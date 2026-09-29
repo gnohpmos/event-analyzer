@@ -16,6 +16,7 @@ export type ClassificationType =
   | 'PHYSICAL_LINK_FAILURE'
   | 'ADMIN_SHUTDOWN'
   | 'LINK_FLAPPING'
+  | 'TRANSIENT_GLITCH'
   | 'CONNECTIVITY_RECOVERED';
 
 export type ConfidenceType = 'HIGH' | 'MEDIUM' | 'LOW' | null;
@@ -125,6 +126,13 @@ export interface IncidentListItem {
   device_ip: string;
   device_type: string;
   interface_name?: string;
+  link_description?: string;
+  ticket_id_tss?: string | null;
+  circuit_id?: string | null;
+  remote_device?: string | null;
+  site_name?: string | null;
+  tts_status?: string | null;
+  repair_team?: string | null;
   prtg_sensor_id?: string;
   status: IncidentStatus;
   classification: ClassificationType | null;
@@ -147,6 +155,12 @@ export interface IncidentListItem {
 
 export interface IncidentDetail extends IncidentListItem {
   primary_device_detail?: Device;
+  remote_interface?: string | null;
+  response_department?: string | null;
+  actual_cause?: string | null;
+  resolution?: string | null;
+  source_gps?: string | null;
+  dest_gps?: string | null;
   timeline: TimelineEntry[];
   verifications: Verification[];
   incident_events: IncidentEventLink[];
@@ -300,6 +314,7 @@ export interface ReportTopUnstableLink {
   province: string;
   region: string;
   interface_name: string;
+  link_description?: string;
   down_count: number;
   total_flap_count: number;
   total_net_downtime_seconds: number;
@@ -345,6 +360,14 @@ export interface SerializedReportIncident {
   incident_number: string;
   incident_type?: 'DEVICE' | 'LINK';
   interface_name?: string;
+  link_description?: string;
+  ticket_id_tss?: string | null;
+  circuit_id?: string | null;
+  site_name?: string | null;
+  tts_status?: string | null;
+  repair_team?: string | null;
+  actual_cause?: string | null;
+  resolution?: string | null;
   flap_count?: number;
   net_downtime_seconds?: number | null;
   soak_until?: string | null;

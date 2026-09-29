@@ -16,63 +16,69 @@ import { IncidentStatus, ClassificationType, ConfidenceType } from '../types';
 
 interface StatusBadgeProps {
   status: IncidentStatus;
+  compact?: boolean;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, compact = false }) => {
+  const badgeClass = compact 
+    ? "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+    : "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold";
+  const iconClass = compact ? "w-3 h-3 flex-shrink-0" : "w-3.5 h-3.5 flex-shrink-0";
+
   switch (status) {
     case 'DOWN':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/25">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
-          <AlertTriangle className="w-3.5 h-3.5" />
+        <span className={`${badgeClass} bg-rose-500/10 text-rose-400 border border-rose-500/25`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping flex-shrink-0" />
+          <AlertTriangle className={iconClass} />
           DOWN
         </span>
       );
     case 'FLAPPING':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/25">
-          <Activity className="w-3.5 h-3.5 animate-pulse text-fuchsia-400" />
+        <span className={`${badgeClass} bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/25`}>
+          <Activity className={`${iconClass} animate-pulse text-fuchsia-400`} />
           FLAPPING
         </span>
       );
     case 'STABILIZING':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25">
-          <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-          STABILIZING (SOAK)
+        <span className={`${badgeClass} bg-amber-500/10 text-amber-400 border border-amber-500/25`}>
+          <Clock className={`${iconClass} text-amber-400 animate-pulse`} />
+          {compact ? 'STABILIZING' : 'STABILIZING (SOAK)'}
         </span>
       );
     case 'RECOVERY_CHECK':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/25">
-          <RotateCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
-          RECOVERY CHECK
+        <span className={`${badgeClass} bg-amber-500/10 text-amber-400 border border-amber-500/25`}>
+          <RotateCw className={`${iconClass} animate-spin text-amber-400`} />
+          {compact ? 'RECOVERY' : 'RECOVERY CHECK'}
         </span>
       );
     case 'RECOVERED':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-          <CheckCircle2 className="w-3.5 h-3.5" />
+        <span className={`${badgeClass} bg-emerald-500/10 text-emerald-400 border border-emerald-500/25`}>
+          <CheckCircle2 className={iconClass} />
           RECOVERED
         </span>
       );
     case 'VERIFICATION_FAILED':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/25">
-          <AlertOctagon className="w-3.5 h-3.5" />
-          VERIF FAILED
+        <span className={`${badgeClass} bg-orange-500/10 text-orange-400 border border-orange-500/25`}>
+          <AlertOctagon className={iconClass} />
+          {compact ? 'FAILED' : 'VERIF FAILED'}
         </span>
       );
     case 'MANUAL_REVIEW_REQUIRED':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/25">
-          <HelpCircle className="w-3.5 h-3.5" />
-          MANUAL REVIEW
+        <span className={`${badgeClass} bg-purple-500/10 text-purple-400 border border-purple-500/25`}>
+          <HelpCircle className={iconClass} />
+          {compact ? 'MANUAL' : 'MANUAL REVIEW'}
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground border border-border">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border border-border`}>
           {status}
         </span>
       );
@@ -160,6 +166,16 @@ export const ClassificationBadge: React.FC<ClassificationBadgeProps> = ({ classi
           <PowerOff className="w-3.5 h-3.5 text-slate-400" />
           Admin Shutdown
         </span>
+      );
+    case 'TRANSIENT_GLITCH':
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            Transient Glitch
+          </span>
+          {renderConfidence()}
+        </div>
       );
     case 'CONNECTIVITY_RECOVERED':
       return (

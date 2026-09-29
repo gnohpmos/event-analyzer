@@ -69,9 +69,23 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
                   onClick={() => onSelectIncident && onSelectIncident(inc.id)}
                   className="hover:bg-muted/40 cursor-pointer transition-colors"
                 >
-                  <td className="py-3 px-4 font-mono font-bold text-primary flex items-center gap-1.5">
-                    <span>{inc.incident_number}</span>
-                    <ExternalLink className="w-3 h-3 text-muted-foreground opacity-60" />
+                  <td className="py-3 px-4 font-mono font-bold text-primary">
+                    <div className="flex items-center gap-1.5">
+                      <span>{inc.incident_number}</span>
+                      <ExternalLink className="w-3 h-3 text-muted-foreground opacity-60" />
+                    </div>
+                    {inc.ticket_id_tss && (
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          🎫 {inc.ticket_id_tss}
+                        </span>
+                        {inc.tts_status && (
+                          <span className="px-1 py-0.2 rounded text-[9px] font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                            {inc.tts_status === 'Work In Progress' ? 'WIP' : inc.tts_status}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 px-3 text-center">
                     <span
@@ -86,12 +100,35 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
                   </td>
                   <td className="py-3 px-4">
                     <div className="font-bold text-foreground">{inc.sys_name || inc.device_name}</div>
+                    {inc.site_name && (
+                      <div className="text-[10px] text-purple-400 font-medium">
+                        Node: {inc.site_name}
+                      </div>
+                    )}
                     {inc.interface_name && (
                       <div
                         className="font-mono text-[11px] text-sky-400 font-medium truncate max-w-[240px]"
                         title={inc.interface_name}
                       >
                         พอร์ต: {inc.interface_name}
+                      </div>
+                    )}
+                    {inc.circuit_id && (
+                      <div className="font-mono text-[10px] text-emerald-400 font-medium truncate max-w-[240px]">
+                        CKT: {inc.circuit_id}
+                      </div>
+                    )}
+                    {inc.repair_team && (
+                      <div className="text-[10px] text-muted-foreground/80 truncate max-w-[240px]" title={inc.repair_team}>
+                        ช่าง: {inc.repair_team}
+                      </div>
+                    )}
+                    {inc.link_description && (
+                      <div
+                        className="text-[10px] text-muted-foreground truncate max-w-[260px]"
+                        title={inc.link_description}
+                      >
+                        {inc.link_description}
                       </div>
                     )}
                     <div className="font-mono text-[10px] text-muted-foreground">
@@ -121,6 +158,11 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
                       classification={inc.classification}
                       confidence={inc.confidence}
                     />
+                    {inc.actual_cause && (
+                      <div className="text-[10px] text-emerald-400/90 font-medium mt-1 truncate max-w-[200px]" title={`สาเหตุจาก TTS: ${inc.actual_cause}`}>
+                        TTS: {inc.actual_cause}
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 px-3 text-muted-foreground text-[11px]">
                     {formatDateTime(inc.down_time)}

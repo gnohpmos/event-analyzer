@@ -5,7 +5,7 @@ from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from common.constants import IncidentStatus, Classification, IncidentType
+from common.constants import IncidentStatus, Classification, IncidentType, TimelineEventType
 from incidents.models import Incident, EventTimeline, IncidentEvent
 from verification.models import Verification
 from devices.models import Device
@@ -31,7 +31,11 @@ class IncidentListView(generics.ListAPIView):
     """
     serializer_class = IncidentListSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['incident_number', 'primary_device__name', 'primary_device__management_ip', 'interface_name']
+    search_fields = [
+        'incident_number', 'primary_device__name', 'primary_device__management_ip',
+        'interface_name', 'ticket_id_tss', 'circuit_id', 'remote_device',
+        'site_name', 'repair_team', 'tts_status'
+    ]
     ordering_fields = ['down_time', 'up_time', 'created_at', 'incident_number']
     ordering = ['-down_time']
 
@@ -72,6 +76,28 @@ class IncidentDetailView(generics.RetrieveUpdateDestroyAPIView):
     ).all()
     serializer_class = IncidentDetailSerializer
 
+    def perform_update(self, serializer):
+        old_cls = serializer.instance.classification
+        old_conf = serializer.instance.confidence
+        instance = serializer.save()
+
+        # Audit timeline entry on manual classification / confidence update
+        cls_changed = 'classification' in serializer.validated_data and serializer.validated_data['classification'] != old_cls
+        conf_changed = 'confidence' in serializer.validated_data and serializer.validated_data['confidence'] != old_conf
+
+        if cls_changed or conf_changed:
+            instance.add_timeline_entry(
+                event_type=TimelineEventType.CLASSIFICATION_COMPLETED,
+                source='MANUAL_OVERRIDE',
+                description=f"RCA classification manually updated to {instance.classification} ({instance.confidence or 'HIGH'})",
+                data={
+                    'classification': instance.classification,
+                    'confidence': instance.confidence,
+                    'previous_classification': old_cls,
+                    'previous_confidence': old_conf,
+                }
+            )
+
 
 class IncidentTimelineListView(generics.ListAPIView):
     """List timeline entries for an incident."""
@@ -98,6 +124,38 @@ class IncidentEventsListView(generics.ListAPIView):
     def get_queryset(self):
         incident_id = self.kwargs.get('pk')
         return IncidentEvent.objects.filter(incident_id=incident_id).select_related('event', 'event__source', 'event__device').order_by('-created_at')
+
+
+class IncidentSyncTicketView(APIView):
+    """
+    On-demand trigger to sync TSS Trouble Ticket & Circuit info from IPGET for a specific incident.
+    POST /api/v1/incidents/{pk}/sync-ticket/
+    """
+    def post(self, request, pk):
+        try:
+            incident = Incident.objects.select_related('primary_device').get(pk=pk)
+        except Incident.DoesNotExist:
+            return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from incidents.tasks import sync_single_incident_ticket_task
+        res = sync_single_incident_ticket_task(incident.id)
+        incident.refresh_from_db()
+        return Response({
+            'status': 'success',
+            'sync_result': res,
+            'ticket_id_tss': incident.ticket_id_tss,
+            'circuit_id': incident.circuit_id,
+            'remote_device': incident.remote_device,
+            'remote_interface': incident.remote_interface,
+            'site_name': incident.site_name,
+            'tts_status': incident.tts_status,
+            'repair_team': incident.repair_team,
+            'response_department': incident.response_department,
+            'actual_cause': incident.actual_cause,
+            'resolution': incident.resolution,
+            'source_gps': incident.source_gps,
+            'dest_gps': incident.dest_gps,
+        })
 
 
 class DashboardSummaryView(APIView):

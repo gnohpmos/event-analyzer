@@ -79,6 +79,31 @@ export const api = {
     if (!res.ok) throw new Error(`Failed to delete incident ${id}`);
   },
 
+  async syncIncidentTicket(id: number): Promise<{
+    status: string;
+    ticket_id_tss?: string | null;
+    circuit_id?: string | null;
+    remote_device?: string | null;
+    remote_interface?: string | null;
+    site_name?: string | null;
+    tts_status?: string | null;
+    repair_team?: string | null;
+    response_department?: string | null;
+    actual_cause?: string | null;
+    resolution?: string | null;
+    source_gps?: string | null;
+    dest_gps?: string | null;
+    sync_result?: any;
+    message?: string;
+  }> {
+    const res = await fetch(`/api/v1/incidents/${id}/sync-ticket/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`Failed to sync ticket for incident ${id}`);
+    return res.json();
+  },
+
   async getDevices(): Promise<Device[]> {
     const res = await fetch('/api/v1/devices/');
     if (!res.ok) throw new Error('Failed to fetch devices');

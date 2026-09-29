@@ -72,6 +72,37 @@ def extract_interface_name(sensor_name: str, payload_interface: str = '') -> str
     return s.strip() or sensor_name.strip()
 
 
+def extract_link_description(sensor_name: str, payload_description: str = '') -> str:
+    """
+    Extract link description / circuit info from PRTG sensor title.
+    Examples:
+      - '(HundredGigE0/1/0/0) TBB0000726 : MPLS 100GE...' -> 'TBB0000726 : MPLS 100GE...'
+      - '(TenGigE0/0/0/27) TBB_______ : MPLS 10GE...' -> 'TBB_______ : MPLS 10GE...'
+    """
+    if payload_description and payload_description.strip():
+        return payload_description.strip()
+
+    if not sensor_name:
+        return ''
+
+    s = sensor_name.strip()
+    # Strip trailing (SNMP Traffic) or (Traffic)
+    s = re.sub(r'\s*\((?:SNMP\s+)?Traffic\)\s*$', '', s, flags=re.IGNORECASE)
+
+    # Check for leading token in parentheses like (TenGigE0/0/0/31)
+    m = re.match(r'^\(([A-Za-z0-9_\/\.\-]+)\)\s*(.*)$', s)
+    if m:
+        if_name = m.group(1).strip()
+        rest = m.group(2).strip()
+        # Clean trailing separators like '|' or '-'
+        rest = re.sub(r'[\s\|\-]+$', '', rest).strip()
+        if rest and rest.lower() != if_name.lower():
+            return re.sub(r'\s+', ' ', rest).strip()
+        return ''
+
+    return ''
+
+
 # PRTG status value mapping (case-insensitive prefixes/patterns)
 def parse_prtg_status(raw_status: str) -> Optional[str]:
     """
@@ -186,9 +217,13 @@ class PRTGAdapter(BaseSourceAdapter):
                 metadata[f'prtg_{key}'] = str(val).strip()
 
         interface_name = ''
+        link_description = ''
         if is_link:
             interface_name = extract_interface_name(sensor_str, explicit_interface)
+            link_description = extract_link_description(sensor_str, raw_payload.get('description', ''))
             metadata['interface_name'] = interface_name
+            if link_description:
+                metadata['link_description'] = link_description
             if 'prtg_sensor_id' in metadata:
                 metadata['sensor_id'] = metadata['prtg_sensor_id']
 

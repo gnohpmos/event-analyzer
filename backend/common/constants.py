@@ -108,6 +108,7 @@ class Classification:
     PHYSICAL_LINK_FAILURE = 'PHYSICAL_LINK_FAILURE'
     ADMIN_SHUTDOWN = 'ADMIN_SHUTDOWN'
     LINK_FLAPPING = 'LINK_FLAPPING'
+    TRANSIENT_GLITCH = 'TRANSIENT_GLITCH'
     CONNECTIVITY_RECOVERED = 'CONNECTIVITY_RECOVERED'
 
     CHOICES = [
@@ -119,6 +120,7 @@ class Classification:
         (PHYSICAL_LINK_FAILURE, 'Physical Link Failure'),
         (ADMIN_SHUTDOWN, 'Admin Shutdown'),
         (LINK_FLAPPING, 'Link Flapping'),
+        (TRANSIENT_GLITCH, 'Transient Glitch'),
         (CONNECTIVITY_RECOVERED, 'Connectivity Recovered'),
     ]
 
@@ -162,6 +164,7 @@ class TimelineEventType:
     SOAK_TIMER_START = 'SOAK_TIMER_START'
     SOAK_TIMER_RESET = 'SOAK_TIMER_RESET'
     SOAK_TIMER_COMPLETED = 'SOAK_TIMER_COMPLETED'
+    TICKET_LINKED = 'TICKET_LINKED'
 
     CHOICES = [
         (DOWN, 'Down'),
@@ -181,6 +184,7 @@ class TimelineEventType:
         (SOAK_TIMER_START, 'Soak Timer Start'),
         (SOAK_TIMER_RESET, 'Soak Timer Reset'),
         (SOAK_TIMER_COMPLETED, 'Soak Timer Completed'),
+        (TICKET_LINKED, 'Ticket Linked'),
     ]
 
 

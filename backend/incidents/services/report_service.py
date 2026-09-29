@@ -58,6 +58,7 @@ class IncidentReportService:
             'unable_to_verify': 0,
             'link_flapping': 0,
             'physical_link_failure': 0,
+            'transient_glitch': 0,
             'parent_device_down': 0,
             'admin_shutdown': 0,
             'connectivity_recovered': 0,
@@ -136,12 +137,18 @@ class IncidentReportService:
                 return 'link_flapping'
             if raw_cls == Classification.PHYSICAL_LINK_FAILURE:
                 return 'physical_link_failure'
+            if raw_cls == Classification.TRANSIENT_GLITCH:
+                return 'transient_glitch'
             if raw_cls == Classification.PARENT_DEVICE_DOWN:
                 return 'parent_device_down'
             if raw_cls == Classification.ADMIN_SHUTDOWN:
                 return 'admin_shutdown'
             if raw_cls == Classification.CONNECTIVITY_RECOVERED or inc.status == IncidentStatus.RECOVERED:
-                return 'connectivity_recovered'
+                # Differentiate sustained physical outage (>= 15 min / 900s) vs momentary glitch (< 15 min)
+                dt = inc.net_downtime_seconds or inc.downtime_seconds or 0
+                if dt >= 900:
+                    return 'physical_link_failure'
+                return 'transient_glitch'
             return 'ongoing_down'
         else:
             if raw_cls == Classification.DEVICE_REBOOT_RELATED:
@@ -378,6 +385,7 @@ class IncidentReportService:
                         'province': prov_name,
                         'region': reg_name,
                         'interface_name': inc.interface_name,
+                        'link_description': inc.link_description or '',
                         'down_count': 0,
                         'total_flap_count': 0,
                         'total_net_downtime_seconds': 0.0,
@@ -389,12 +397,22 @@ class IncidentReportService:
                 link_unstable_counts[link_key]['total_net_downtime_seconds'] += (net_dt or 0.0)
                 link_unstable_counts[link_key]['status'] = inc.status
                 link_unstable_counts[link_key]['classification'] = inc.classification
+                if inc.link_description and not link_unstable_counts[link_key].get('link_description'):
+                    link_unstable_counts[link_key]['link_description'] = inc.link_description
 
             serialized_incidents.append({
                 'id': inc.id,
                 'incident_number': inc.incident_number,
                 'incident_type': inc.incident_type,
                 'interface_name': inc.interface_name or '',
+                'link_description': inc.link_description or '',
+                'ticket_id_tss': inc.ticket_id_tss or '',
+                'circuit_id': inc.circuit_id or '',
+                'site_name': inc.site_name or '',
+                'tts_status': inc.tts_status or '',
+                'repair_team': inc.repair_team or '',
+                'actual_cause': inc.actual_cause or '',
+                'resolution': inc.resolution or '',
                 'flap_count': inc.flap_count or 0,
                 'net_downtime_seconds': inc.net_downtime_seconds,
                 'soak_until': inc.soak_until.isoformat() if inc.soak_until else None,
@@ -482,16 +500,22 @@ class IncidentReportService:
         if incident_type == 'link':
             root_causes_breakdown = [
                 {
+                    'key': 'physical_link_failure',
+                    'label': 'Physical Link Failure (สายขาด/อุปกรณ์ชำรุด > 15 นาที)',
+                    'count': causes_summary['physical_link_failure'],
+                    'color': '#ef4444'
+                },
+                {
+                    'key': 'transient_glitch',
+                    'label': 'Transient Glitch (สัญญาณสะดุดชั่วคราว < 15 นาที)',
+                    'count': causes_summary['transient_glitch'],
+                    'color': '#10b981'
+                },
+                {
                     'key': 'link_flapping',
                     'label': 'Link Flapping (พอร์ตกระพริบซ้ำๆ)',
                     'count': causes_summary['link_flapping'],
                     'color': '#8b5cf6'
-                },
-                {
-                    'key': 'physical_link_failure',
-                    'label': 'Physical Link Failure (สายขาด/พอร์ตเสีย)',
-                    'count': causes_summary['physical_link_failure'],
-                    'color': '#ef4444'
                 },
                 {
                     'key': 'parent_device_down',
@@ -504,12 +528,6 @@ class IncidentReportService:
                     'label': 'Admin Shutdown (ปิดพอร์ตโดยผู้ดูแล)',
                     'count': causes_summary['admin_shutdown'],
                     'color': '#64748b'
-                },
-                {
-                    'key': 'connectivity_recovered',
-                    'label': 'Connectivity Recovered (กู้คืนปกติ)',
-                    'count': causes_summary['connectivity_recovered'],
-                    'color': '#10b981'
                 },
                 {
                     'key': 'stabilizing_link',
@@ -560,16 +578,22 @@ class IncidentReportService:
         else:
             root_causes_breakdown = [
                 {
-                    'key': 'link_flapping',
-                    'label': 'Link Flapping (พอร์ตกระพริบซ้ำๆ)',
-                    'count': causes_summary['link_flapping'],
-                    'color': '#8b5cf6'
-                },
-                {
                     'key': 'physical_link_failure',
                     'label': 'Physical Link Failure (สายขาด/พอร์ตเสีย)',
                     'count': causes_summary['physical_link_failure'],
                     'color': '#ef4444'
+                },
+                {
+                    'key': 'transient_glitch',
+                    'label': 'Transient Glitch (สัญญาณสะดุดชั่วคราว)',
+                    'count': causes_summary['transient_glitch'],
+                    'color': '#10b981'
+                },
+                {
+                    'key': 'link_flapping',
+                    'label': 'Link Flapping (พอร์ตกระพริบซ้ำๆ)',
+                    'count': causes_summary['link_flapping'],
+                    'color': '#8b5cf6'
                 },
                 {
                     'key': 'device_reboot_related',
@@ -606,12 +630,6 @@ class IncidentReportService:
                     'label': 'Admin Shutdown (ปิดพอร์ตโดยผู้ดูแล)',
                     'count': causes_summary['admin_shutdown'],
                     'color': '#64748b'
-                },
-                {
-                    'key': 'connectivity_recovered',
-                    'label': 'Connectivity Recovered (กู้คืนปกติ)',
-                    'count': causes_summary['connectivity_recovered'],
-                    'color': '#10b981'
                 },
                 {
                     'key': 'stabilizing_link',

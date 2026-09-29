@@ -145,7 +145,7 @@ export const IncidentsView: React.FC = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by incident number, device, port, or IP..."
+            placeholder="Search by incident number, TSS ticket, device, port, or IP..."
             className="w-full bg-card border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <svg
@@ -200,7 +200,7 @@ export const IncidentsView: React.FC = () => {
                 <tr>
                   <th className="px-5 py-3.5">Incident Number</th>
                   <th className="px-5 py-3.5">Device & Target</th>
-                  <th className="px-5 py-3.5">Status & Action</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">Status & Action</th>
                   <th className="px-5 py-3.5">Classification</th>
                   <th className="px-5 py-3.5">Down / Up Time</th>
                   <th className="px-5 py-3.5 text-center">Verifications</th>
@@ -228,14 +228,71 @@ export const IncidentsView: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {incident.ticket_id_tss ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 font-sans shadow-sm"
+                            title={`TSS Trouble Ticket: ${incident.ticket_id_tss}`}
+                          >
+                            <svg className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
+                            </svg>
+                            <span className="font-mono tracking-tight">{incident.ticket_id_tss}</span>
+                          </span>
+                          {incident.tts_status && (
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase ${
+                              incident.tts_status.toLowerCase().includes('resolved') || incident.tts_status.toLowerCase().includes('close')
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            }`}>
+                              {incident.tts_status === 'Work In Progress' ? 'WIP' : incident.tts_status}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center">
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground/80 bg-muted/40 border border-border/60"
+                            title="Checking IPGET / TSS background sync"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 animate-pulse"></span>
+                            Waiting TSS...
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="px-5 py-4">
                       <div className="font-medium text-foreground">{incident.device_name}</div>
                       <div className="text-xs font-mono text-muted-foreground">{incident.device_ip}</div>
+                      {incident.site_name && (
+                        <div className="text-[11px] text-purple-400 font-medium mt-0.5 flex items-center gap-1">
+                          <span className="text-[9px] px-1 py-0.2 bg-purple-500/15 border border-purple-500/30 rounded text-purple-300">SITE</span>
+                          <span>{incident.site_name}</span>
+                        </div>
+                      )}
                       {incident.interface_name && (
                         <div className="text-xs font-mono text-cyan-400 font-medium mt-0.5">
                           Port: {incident.interface_name}
+                        </div>
+                      )}
+                      {incident.circuit_id && (
+                        <div className="text-[11px] font-mono text-emerald-400 font-medium mt-0.5 flex items-center gap-1 flex-wrap">
+                          <span className="text-[9px] px-1 py-0.2 bg-emerald-500/15 border border-emerald-500/30 rounded text-emerald-300">CKT</span>
+                          <span>{incident.circuit_id}</span>
+                          {incident.remote_device && (
+                            <span className="text-muted-foreground text-[10px]">⇄ {incident.remote_device}</span>
+                          )}
+                        </div>
+                      )}
+                      {incident.repair_team && (
+                        <div className="text-[10px] text-muted-foreground/80 mt-0.5 truncate max-w-xs" title={`ทีมช่าง: ${incident.repair_team}`}>
+                          ช่าง: {incident.repair_team}
+                        </div>
+                      )}
+                      {incident.link_description && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5 max-w-xs truncate" title={incident.link_description}>
+                          {incident.link_description}
                         </div>
                       )}
                       {incident.flap_count !== undefined && incident.flap_count > 0 && (
@@ -250,21 +307,21 @@ export const IncidentsView: React.FC = () => {
                       )}
                     </td>
 
-                    <td className="px-5 py-4">
-                      <div className="flex items-center space-x-2">
-                        <StatusBadge status={incident.status} />
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusBadge status={incident.status} compact />
                         <select
                           value={incident.status}
                           onChange={(e) => handleQuickStatusChange(incident.id, e.target.value)}
-                          className="bg-card border border-border rounded text-[11px] text-foreground py-1 px-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="bg-muted/40 hover:bg-muted/70 border border-border/70 rounded text-[10px] text-muted-foreground hover:text-foreground py-0.5 px-1.5 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors w-fit"
                           title="Quick change status"
                         >
                           <option value="DOWN">Set DOWN</option>
                           <option value="FLAPPING">Set FLAPPING</option>
                           <option value="STABILIZING">Set STABILIZING</option>
-                          <option value="RECOVERY_CHECK">Set RECOVERY_CHECK</option>
+                          <option value="RECOVERY_CHECK">Set RECOVERY</option>
                           <option value="RECOVERED">Set RECOVERED</option>
-                          <option value="MANUAL_REVIEW_REQUIRED">Set MANUAL_REVIEW</option>
+                          <option value="MANUAL_REVIEW_REQUIRED">Set MANUAL</option>
                         </select>
                       </div>
                     </td>
@@ -323,7 +380,10 @@ export const IncidentsView: React.FC = () => {
       {selectedIncidentId !== null && (
         <IncidentDetailModal
           incidentId={selectedIncidentId}
-          onClose={() => setSelectedIncidentId(null)}
+          onClose={() => {
+            setSelectedIncidentId(null);
+            loadIncidents();
+          }}
         />
       )}
     </div>

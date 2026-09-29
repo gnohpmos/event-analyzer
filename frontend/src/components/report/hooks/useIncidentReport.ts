@@ -142,6 +142,7 @@ export const useIncidentReport = () => {
       inc.device_name.toLowerCase().includes(term) ||
       inc.sys_name.toLowerCase().includes(term) ||
       (inc.interface_name && inc.interface_name.toLowerCase().includes(term)) ||
+      (inc.link_description && inc.link_description.toLowerCase().includes(term)) ||
       inc.device_ip.toLowerCase().includes(term) ||
       inc.province.toLowerCase().includes(term) ||
       inc.region.toLowerCase().includes(term)

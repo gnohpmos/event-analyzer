@@ -77,7 +77,7 @@ services:
       resources:
         limits:
           memory: 512M
-    command: sh -c "celery -A analyzer_project worker -l info --concurrency=4"
+    command: sh -c "celery -A analyzer_project worker -B -l info --concurrency=4"
     volumes:
       - ./backend:/app
     env_file:

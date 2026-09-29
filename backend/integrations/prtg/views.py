@@ -323,6 +323,7 @@ def prtg_link_event_webhook(request):
             "device_name": device.name,
             "device_ip": device.management_ip,
             "interface_name": interface_name,
+            "link_description": normalized.metadata.get('link_description', ''),
             "sensor_name": sensor_name,
             "sensor_id": sensor_id,
             "event_status": event_status,

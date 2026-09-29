@@ -141,6 +141,12 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    'sync-pending-tss-tickets-every-2-minutes': {
+        'task': 'incidents.tasks.sync_pending_tss_tickets_task',
+        'schedule': 120.0,
+    },
+}
 
 # Business Logic Configuration
 ROUTER_REBOOT_THRESHOLD_SECONDS = int(os.environ.get('ROUTER_REBOOT_THRESHOLD_SECONDS', 3600))
@@ -155,3 +161,9 @@ DEFAULT_SNMP_TIMEOUT = int(os.environ.get('DEFAULT_SNMP_TIMEOUT', 5))
 # Integration Configuration
 PRTG_ENABLED = os.environ.get('PRTG_ENABLED', 'True').lower() in ('true', '1', 'yes')
 PRTG_API_TOKEN = os.environ.get('PRTG_API_TOKEN', 'prtg-secure-webhook-token-2026')
+
+# IPGET Integration Configuration
+IPGET_ENABLED = os.environ.get('IPGET_ENABLED', 'True').lower() in ('true', '1', 'yes')
+IPGET_BASE_URL = os.environ.get('IPGET_BASE_URL', 'http://10.199.47.38')
+IPGET_API_KEY = os.environ.get('IPGET_API_KEY', '46177ba00a8de4eaa9dba64988274da3')
+IPGET_TIMEOUT = int(os.environ.get('IPGET_TIMEOUT', 10))

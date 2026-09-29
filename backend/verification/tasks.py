@@ -78,6 +78,10 @@ def run_snmp_verification(self, incident_id: int):
 
     check_time = timezone.now()
 
+    if not Device.objects.filter(id=device.id).exists() or not Incident.objects.filter(id=incident.id).exists():
+        logger.warning(f"Device {device.id} or Incident {incident.id} was deleted during verification. Aborting record creation.")
+        return {"status": "aborted", "reason": "Device or incident deleted"}
+
     # 3. Create Verification Record
     verification_record = Verification.objects.create(
         incident=incident,

@@ -55,6 +55,7 @@ def process_link_event(event: NetworkEvent, device: Device) -> dict:
         metadata.get('prtg_sensor') or
         'Unknown-Interface'
     ).strip()
+    link_description = str(metadata.get('link_description') or '').strip()
     prtg_sensor_id = str(metadata.get('prtg_sensor_id') or metadata.get('sensor_id') or '').strip()
 
     with transaction.atomic():
@@ -117,6 +118,10 @@ def process_link_event(event: NetworkEvent, device: Device) -> dict:
 
         is_within_window = False
         if recent_incident:
+            if not recent_incident.link_description and link_description:
+                recent_incident.link_description = link_description
+                recent_incident.save(update_fields=['link_description', 'updated_at'])
+
             time_diff = (event.event_time - recent_incident.last_seen).total_seconds()
             if recent_incident.status in IncidentStatus.ACTIVE_STATUSES or abs(time_diff) <= FLAP_WINDOW_SECONDS:
                 is_within_window = True
@@ -221,6 +226,7 @@ def process_link_event(event: NetworkEvent, device: Device) -> dict:
                 incident_type=IncidentType.LINK,
                 primary_device=device,
                 interface_name=interface_name,
+                link_description=link_description,
                 prtg_sensor_id=prtg_sensor_id,
                 status=IncidentStatus.DOWN,
                 down_time=event.event_time,

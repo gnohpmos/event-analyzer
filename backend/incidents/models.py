@@ -26,9 +26,61 @@ class Incident(models.Model):
         max_length=150, blank=True, default='', db_index=True,
         help_text='Interface or port name if incident_type is LINK'
     )
+    link_description = models.CharField(
+        max_length=300, blank=True, default='',
+        help_text='Link description or circuit info extracted from PRTG sensor or ifAlias'
+    )
     prtg_sensor_id = models.CharField(
         max_length=50, blank=True, default='', db_index=True,
         help_text='PRTG sensor ID if from PRTG'
+    )
+    ticket_id_tss = models.CharField(
+        max_length=50, blank=True, default='', db_index=True,
+        help_text='Trouble Ticket ID from TSS/TTS (e.g. SD26094869)'
+    )
+    circuit_id = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Circuit ID / NTID (e.g. TBB145020)'
+    )
+    remote_device = models.CharField(
+        max_length=150, blank=True, default='',
+        help_text='Remote endpoint hostname or IP'
+    )
+    remote_interface = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Remote endpoint interface name'
+    )
+    site_name = models.CharField(
+        max_length=150, blank=True, default='',
+        help_text='Site / Station name'
+    )
+    tts_status = models.CharField(
+        max_length=50, blank=True, default='',
+        help_text='Trouble Ticket status in ITSM/TTS (e.g. Work In Progress, Resolved, Closed)'
+    )
+    repair_team = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Responsible repair team from TTS'
+    )
+    response_department = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Responsible department or area from TTS'
+    )
+    actual_cause = models.TextField(
+        blank=True, default='',
+        help_text='Actual root cause recorded by repair team in TTS'
+    )
+    resolution = models.TextField(
+        blank=True, default='',
+        help_text='Resolution action taken by repair team in TTS'
+    )
+    source_gps = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Source location GPS coordinates (lat, lon)'
+    )
+    dest_gps = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Destination location GPS coordinates (lat, lon)'
     )
 
     status = models.CharField(

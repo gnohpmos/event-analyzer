@@ -94,9 +94,9 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
                 <>
                   <option value="LINK_FLAPPING">Link Flapping (พอร์ตกระพริบ)</option>
                   <option value="PHYSICAL_LINK_FAILURE">Physical Failure (สายขาด/พอร์ตดับ)</option>
+                  <option value="TRANSIENT_GLITCH">Transient Glitch (สัญญาณสะดุดชั่วคราว)</option>
                   <option value="PARENT_DEVICE_DOWN">Parent Device Down (เราเตอร์หลักดับ)</option>
                   <option value="ADMIN_SHUTDOWN">Admin Shutdown (ปิดพอร์ตโดยผู้ดูแล)</option>
-                  <option value="CONNECTIVITY_RECOVERED">Recovered (กู้คืนปกติ)</option>
                 </>
               ) : incidentType === 'device' ? (
                 <>
@@ -109,6 +109,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
                 <>
                   <option value="LINK_FLAPPING">Link Flapping (พอร์ตกระพริบ)</option>
                   <option value="PHYSICAL_LINK_FAILURE">Physical Link Failure (สายขาด)</option>
+                  <option value="TRANSIENT_GLITCH">Transient Glitch (สัญญาณสะดุดชั่วคราว)</option>
                   <option value="DEVICE_REBOOT_RELATED">Device Reboot (ยืนยัน)</option>
                   <option value="DEVICE_REBOOT_SUSPECTED">Suspected Reboot (สงสัย)</option>
                   <option value="PARENT_DEVICE_DOWN">Parent Device Down (เราเตอร์หลักดับ)</option>

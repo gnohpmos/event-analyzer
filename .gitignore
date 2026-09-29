@@ -50,6 +50,7 @@ pnpm-debug.log*
 *.log
 logs/
 *.pid
+celerybeat-schedule*
 
 # IDE & OS specific files
 .DS_Store

@@ -36,7 +36,9 @@ class IncidentListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'incident_number', 'incident_type', 'primary_device',
             'device_name', 'device_ip', 'device_type',
-            'interface_name', 'prtg_sensor_id',
+            'interface_name', 'link_description', 'prtg_sensor_id',
+            'ticket_id_tss', 'circuit_id', 'remote_device', 'site_name',
+            'tts_status', 'repair_team',
             'status', 'classification', 'confidence',
             'flap_count', 'soak_until', 'net_downtime_seconds',
             'down_time', 'up_time', 'last_down_time', 'last_up_time', 'last_seen',
@@ -68,7 +70,10 @@ class IncidentDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'incident_number', 'incident_type', 'primary_device',
             'device_name', 'device_ip', 'device_type',
-            'interface_name', 'prtg_sensor_id',
+            'interface_name', 'link_description', 'prtg_sensor_id',
+            'ticket_id_tss', 'circuit_id', 'remote_device', 'remote_interface', 'site_name',
+            'tts_status', 'repair_team', 'response_department', 'actual_cause', 'resolution',
+            'source_gps', 'dest_gps',
             'status', 'classification', 'confidence',
             'flap_count', 'soak_until', 'net_downtime_seconds',
             'down_time', 'up_time', 'last_down_time', 'last_up_time', 'last_seen',

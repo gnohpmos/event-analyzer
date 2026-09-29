@@ -22,6 +22,9 @@ def sync_device_snmp_task(self, device_id: int):
         logger.error(f"CELERY_SYNC_DEVICE_ERROR: Device {device_id} not found")
         return {'success': False, 'error': f'Device {device_id} not found'}
     except Exception as exc:
+        if not Device.objects.filter(id=device_id).exists():
+            logger.warning(f"Device {device_id} was deleted during SNMP sync task.")
+            return {'success': False, 'error': f'Device {device_id} no longer exists'}
         logger.exception(f"CELERY_SYNC_DEVICE_EXCEPTION: {exc}")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
