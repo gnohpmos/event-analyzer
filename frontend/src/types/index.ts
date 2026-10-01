@@ -8,8 +8,11 @@ export type IncidentStatus =
   | 'MANUAL_REVIEW_REQUIRED';
 
 export type ClassificationType = 
+  | 'POWER_OUTAGE_REBOOT'
   | 'DEVICE_REBOOT_RELATED' 
   | 'DEVICE_REBOOT_SUSPECTED' 
+  | 'MANUAL_RELOAD'
+  | 'SOFTWARE_CRASH'
   | 'CONNECTIVITY_LOSS' 
   | 'UNABLE_TO_VERIFY'
   | 'PARENT_DEVICE_DOWN'
@@ -183,8 +186,11 @@ export interface DashboardSummary {
     total_active: number;
   };
   classifications: {
+    power_outage_reboot?: number;
     device_reboot_related: number;
     device_reboot_suspected: number;
+    manual_reload?: number;
+    software_crash?: number;
     connectivity_loss: number;
     unable_to_verify: number;
     link_flapping?: number;
@@ -259,8 +265,11 @@ export interface ReportSummary {
 }
 
 export interface ReportCauses {
+  power_outage_reboot?: number;
   device_reboot_related?: number;
   device_reboot_suspected?: number;
+  manual_reload?: number;
+  software_crash?: number;
   connectivity_loss?: number;
   unable_to_verify?: number;
   link_flapping?: number;

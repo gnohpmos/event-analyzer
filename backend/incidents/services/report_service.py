@@ -52,8 +52,11 @@ class IncidentReportService:
     def create_empty_causes_dict() -> Dict[str, int]:
         """Provides a standardized root cause counter dictionary."""
         return {
+            'power_outage_reboot': 0,
             'device_reboot_related': 0,
             'device_reboot_suspected': 0,
+            'manual_reload': 0,
+            'software_crash': 0,
             'connectivity_loss': 0,
             'unable_to_verify': 0,
             'link_flapping': 0,
@@ -151,6 +154,12 @@ class IncidentReportService:
                 return 'transient_glitch'
             return 'ongoing_down'
         else:
+            if raw_cls == Classification.POWER_OUTAGE_REBOOT:
+                return 'power_outage_reboot'
+            if raw_cls == Classification.MANUAL_RELOAD:
+                return 'manual_reload'
+            if raw_cls == Classification.SOFTWARE_CRASH:
+                return 'software_crash'
             if raw_cls == Classification.DEVICE_REBOOT_RELATED:
                 return 'device_reboot_related'
             if raw_cls == Classification.DEVICE_REBOOT_SUSPECTED:
@@ -545,8 +554,14 @@ class IncidentReportService:
         elif incident_type == 'device':
             root_causes_breakdown = [
                 {
+                    'key': 'power_outage_reboot',
+                    'label': 'Power Outage (ไฟฟ้าดับ/ขัดข้อง)',
+                    'count': causes_summary['power_outage_reboot'],
+                    'color': '#f59e0b'
+                },
+                {
                     'key': 'device_reboot_related',
-                    'label': 'Device Reboot (เครื่องรีบูตชัดเจน)',
+                    'label': 'Device Reboot (เครื่องรีบูตทั่วไป)',
                     'count': causes_summary['device_reboot_related'],
                     'color': '#ef4444'
                 },
@@ -554,7 +569,7 @@ class IncidentReportService:
                     'key': 'device_reboot_suspected',
                     'label': 'Suspected Reboot (สงสัยว่ารีบูต)',
                     'count': causes_summary['device_reboot_suspected'],
-                    'color': '#f59e0b'
+                    'color': '#fbbf24'
                 },
                 {
                     'key': 'connectivity_loss',
@@ -578,6 +593,12 @@ class IncidentReportService:
         else:
             root_causes_breakdown = [
                 {
+                    'key': 'power_outage_reboot',
+                    'label': 'Power Outage (ไฟฟ้าดับ/ขัดข้อง)',
+                    'count': causes_summary['power_outage_reboot'],
+                    'color': '#f59e0b'
+                },
+                {
                     'key': 'physical_link_failure',
                     'label': 'Physical Link Failure (สายขาด/พอร์ตเสีย)',
                     'count': causes_summary['physical_link_failure'],
@@ -597,7 +618,7 @@ class IncidentReportService:
                 },
                 {
                     'key': 'device_reboot_related',
-                    'label': 'Device Reboot (เครื่องรีบูตชัดเจน)',
+                    'label': 'Device Reboot (เครื่องรีบูตทั่วไป)',
                     'count': causes_summary['device_reboot_related'],
                     'color': '#dc2626'
                 },
@@ -605,7 +626,7 @@ class IncidentReportService:
                     'key': 'device_reboot_suspected',
                     'label': 'Suspected Reboot (สงสัยว่ารีบูต)',
                     'count': causes_summary['device_reboot_suspected'],
-                    'color': '#f59e0b'
+                    'color': '#fbbf24'
                 },
                 {
                     'key': 'connectivity_loss',

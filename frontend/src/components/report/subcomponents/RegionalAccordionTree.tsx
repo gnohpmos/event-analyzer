@@ -8,6 +8,7 @@ import {
   Network,
   Repeat,
   Zap,
+  ZapOff,
   ShieldAlert,
   WifiOff,
   HelpCircle,
@@ -123,6 +124,11 @@ export const RegionalAccordionTree: React.FC<RegionalAccordionTreeProps> = ({
                 </>
               ) : (
                 <>
+                  <th className="py-3 px-3 text-center">
+                    <span className="inline-flex items-center gap-1 text-amber-500">
+                      <ZapOff className="w-3 h-3" /> ไฟฟ้าดับ
+                    </span>
+                  </th>
                   <th className="py-3 px-3 text-center">
                     <span className="inline-flex items-center gap-1 text-rose-500">
                       <Zap className="w-3 h-3" /> Reboot ยืนยัน
@@ -251,6 +257,15 @@ export const RegionalAccordionTree: React.FC<RegionalAccordionTreeProps> = ({
                         </>
                       ) : (
                         <>
+                          <td className="py-3 px-3 text-center font-mono">
+                            {(reg.causes.power_outage_reboot ?? 0) > 0 ? (
+                              <span className="text-amber-500 font-bold px-1.5 py-0.5 rounded bg-amber-500/10">
+                                {reg.causes.power_outage_reboot}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/40">-</span>
+                            )}
+                          </td>
                           <td className="py-3 px-3 text-center font-mono">
                             {(reg.causes.device_reboot_related ?? 0) > 0 ? (
                               <span className="text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10">
@@ -395,6 +410,13 @@ export const RegionalAccordionTree: React.FC<RegionalAccordionTreeProps> = ({
                                 </>
                               ) : (
                                 <>
+                                  <td className="py-2.5 px-3 text-center font-mono">
+                                    {(prov.causes.power_outage_reboot ?? 0) > 0 ? (
+                                      <span className="text-amber-500 font-bold">{prov.causes.power_outage_reboot}</span>
+                                    ) : (
+                                      <span className="text-muted-foreground/40">-</span>
+                                    )}
+                                  </td>
                                   <td className="py-2.5 px-3 text-center font-mono">
                                     {(prov.causes.device_reboot_related ?? 0) > 0 ? (
                                       <span className="text-rose-500 font-bold">{prov.causes.device_reboot_related}</span>
@@ -561,6 +583,15 @@ export const RegionalAccordionTree: React.FC<RegionalAccordionTreeProps> = ({
                                         </>
                                       ) : (
                                         <>
+                                          <td className="py-2 px-3 text-center font-mono">
+                                            {dev.causes?.power_outage_reboot ? (
+                                              <span className="text-amber-500 font-bold px-1.5 py-0.5 rounded bg-amber-500/10">
+                                                {dev.causes.power_outage_reboot}
+                                              </span>
+                                            ) : (
+                                              <span className="text-muted-foreground/40">-</span>
+                                            )}
+                                          </td>
                                           <td className="py-2 px-3 text-center font-mono">
                                             {dev.causes?.device_reboot_related ? (
                                               <span className="text-rose-500 font-bold px-1.5 py-0.5 rounded bg-rose-500/10">

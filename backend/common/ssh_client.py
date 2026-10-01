@@ -108,3 +108,23 @@ class ManagedSSHClient:
             channel.recv(65535)
 
         return channel
+
+    def execute_interactive_command(self, command: str, wait_seconds: float = 1.5) -> str:
+        """Executes a command inside an interactive shell, handling MOTD/banner and Cisco prompts gracefully."""
+        ch = self.open_interactive_shell()
+        try:
+            ch.send('terminal length 0\n')
+            time.sleep(0.5)
+            while ch.recv_ready():
+                ch.recv(65535)
+            ch.send(command.strip() + '\n')
+            time.sleep(wait_seconds)
+            output = ''
+            while ch.recv_ready():
+                output += ch.recv(65535).decode('utf-8', errors='ignore')
+            return output
+        finally:
+            try:
+                ch.close()
+            except Exception:
+                pass

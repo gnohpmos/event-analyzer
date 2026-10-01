@@ -125,7 +125,15 @@ export const api = {
     const res = await fetch(`/api/v1/devices/${id}/`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error(`Failed to delete device ${id}`);
+    if (!res.ok) {
+      let errorMsg = `Failed to delete device ${id}`;
+      try {
+        const data = await res.json();
+        if (data.detail) errorMsg = data.detail;
+        else if (data.message) errorMsg = data.message;
+      } catch (_) {}
+      throw new Error(errorMsg);
+    }
   },
 
   async createDevice(data: Partial<Device>): Promise<Device> {

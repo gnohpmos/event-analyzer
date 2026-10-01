@@ -99,8 +99,11 @@ class IncidentStatus:
 # ==============================================================================
 
 class Classification:
+    POWER_OUTAGE_REBOOT = 'POWER_OUTAGE_REBOOT'
     DEVICE_REBOOT_RELATED = 'DEVICE_REBOOT_RELATED'
     DEVICE_REBOOT_SUSPECTED = 'DEVICE_REBOOT_SUSPECTED'
+    MANUAL_RELOAD = 'MANUAL_RELOAD'
+    SOFTWARE_CRASH = 'SOFTWARE_CRASH'
     CONNECTIVITY_LOSS = 'CONNECTIVITY_LOSS'
     UNABLE_TO_VERIFY = 'UNABLE_TO_VERIFY'
     # Link specific classifications
@@ -112,8 +115,11 @@ class Classification:
     CONNECTIVITY_RECOVERED = 'CONNECTIVITY_RECOVERED'
 
     CHOICES = [
+        (POWER_OUTAGE_REBOOT, 'Power Outage Reboot'),
         (DEVICE_REBOOT_RELATED, 'Device Reboot Related'),
         (DEVICE_REBOOT_SUSPECTED, 'Device Reboot Suspected'),
+        (MANUAL_RELOAD, 'Manual Reload'),
+        (SOFTWARE_CRASH, 'Software Crash'),
         (CONNECTIVITY_LOSS, 'Connectivity Loss'),
         (UNABLE_TO_VERIFY, 'Unable to Verify'),
         (PARENT_DEVICE_DOWN, 'Parent Device Down'),

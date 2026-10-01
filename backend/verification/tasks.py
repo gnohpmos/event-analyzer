@@ -12,6 +12,7 @@ from common.constants import (
 )
 from common.settings_helper import get_setting_int
 from classification.engine import ClassificationEngine
+from devices.models import Device
 from incidents.models import Incident
 from verification.models import Verification
 from verification.engine import VerificationEngine

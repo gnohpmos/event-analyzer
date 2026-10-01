@@ -8,6 +8,7 @@ import {
   Activity, 
   Clock, 
   Zap, 
+  ZapOff,
   WifiOff, 
   ArrowUpRight,
   ShieldCheck,
@@ -166,7 +167,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-2">
+            {/* Power Outage */}
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25">
+              <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold mb-1">
+                <ZapOff className="w-3.5 h-3.5" />
+                Power Outage
+              </div>
+              <div className="text-2xl font-bold font-mono text-amber-400">
+                {classifications.power_outage_reboot ?? 0}
+              </div>
+              <span className="text-[11px] text-muted-foreground block mt-1">Confirmed Power Cut</span>
+            </div>
+
             {/* Device Reboot Related */}
             <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
               <div className="flex items-center gap-1.5 text-cyan-400 text-xs font-semibold mb-1">

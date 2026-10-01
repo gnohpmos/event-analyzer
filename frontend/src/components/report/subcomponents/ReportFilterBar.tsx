@@ -100,6 +100,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
                 </>
               ) : incidentType === 'device' ? (
                 <>
+                  <option value="POWER_OUTAGE_REBOOT">Power Outage (ไฟฟ้าดับ)</option>
                   <option value="DEVICE_REBOOT_RELATED">Device Reboot (ยืนยัน)</option>
                   <option value="DEVICE_REBOOT_SUSPECTED">Suspected Reboot (สงสัย)</option>
                   <option value="CONNECTIVITY_LOSS">Connectivity Loss (เครือข่าย)</option>
@@ -107,6 +108,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({
                 </>
               ) : (
                 <>
+                  <option value="POWER_OUTAGE_REBOOT">Power Outage (ไฟฟ้าดับ)</option>
                   <option value="LINK_FLAPPING">Link Flapping (พอร์ตกระพริบ)</option>
                   <option value="PHYSICAL_LINK_FAILURE">Physical Link Failure (สายขาด)</option>
                   <option value="TRANSIENT_GLITCH">Transient Glitch (สัญญาณสะดุดชั่วคราว)</option>

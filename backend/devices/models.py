@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 
 
 class Device(models.Model):
@@ -31,6 +31,17 @@ class Device(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.management_ip})"
+
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        """
+        Safely cascade-delete associated verifications, incidents, and normalized events
+        before removing the device, preventing django.db.models.deletion.ProtectedError.
+        """
+        self.verifications.all().delete()
+        self.incidents.all().delete()
+        self.events.all().delete()
+        return super().delete(*args, **kwargs)
 
 
 class SourceDeviceMapping(models.Model):

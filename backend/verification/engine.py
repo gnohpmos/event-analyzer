@@ -132,8 +132,26 @@ class VerificationEngine:
                     reload_reason = "Reload detected via sysUpTime (Reason N/A via SNMP/SSH)"
                     reload_method = "SYSUPTIME_ONLY"
             else:
-                # Classic IOS or IOS-XE prefers SNMP whyReload
-                if snmp_res.why_reload:
+                # Classic IOS or IOS-XE:
+                # Try SSH show version first if credentials configured to get authoritative 'Last reload reason'
+                # (since legacy SNMP whyReload OID can retain stale ROMMON reboot message from prior reloads)
+                meta = device.metadata if isinstance(device.metadata, dict) else {}
+                ssh_user = meta.get('ssh_username')
+                ssh_pwd = meta.get('ssh_password')
+                ssh_port = int(meta.get('ssh_port', 22))
+
+                ssh_res = get_xr_reboot_history(
+                    host=host,
+                    username=ssh_user,
+                    password=ssh_pwd,
+                    port=ssh_port,
+                    timeout=5
+                )
+                if ssh_res.get("success") and ssh_res.get("parsed_reason") and "unknown" not in str(ssh_res.get("parsed_reason")).lower():
+                    reload_reason = ssh_res.get("parsed_reason")
+                    reload_category = ssh_res.get("category", "UNKNOWN")
+                    reload_method = "SSH_SHOW_VERSION"
+                elif snmp_res.why_reload:
                     reload_reason = snmp_res.why_reload
                     reload_method = "SNMP_WHY_RELOAD"
                     r_lower = reload_reason.lower()
@@ -143,27 +161,13 @@ class VerificationEngine:
                         reload_category = "MANUAL_RELOAD"
                     else:
                         reload_category = "OTHER"
+                elif ssh_res.get("success"):
+                    reload_reason = ssh_res.get("parsed_reason")
+                    reload_category = ssh_res.get("category", "UNKNOWN")
+                    reload_method = "SSH_SHOW_VERSION"
                 else:
-                    # Fallback to SSH if whyReload was absent
-                    meta = device.metadata if isinstance(device.metadata, dict) else {}
-                    ssh_user = meta.get('ssh_username')
-                    ssh_pwd = meta.get('ssh_password')
-                    ssh_port = int(meta.get('ssh_port', 22))
-
-                    ssh_res = get_xr_reboot_history(
-                        host=host,
-                        username=ssh_user,
-                        password=ssh_pwd,
-                        port=ssh_port,
-                        timeout=5
-                    )
-                    if ssh_res.get("success"):
-                        reload_reason = ssh_res.get("parsed_reason")
-                        reload_category = ssh_res.get("category", "UNKNOWN")
-                        reload_method = "SSH_REBOOT_HISTORY"
-                    else:
-                        reload_reason = "Reload detected via sysUpTime (Reason N/A via SNMP/SSH)"
-                        reload_method = "SYSUPTIME_ONLY"
+                    reload_reason = "Reload detected via sysUpTime (Reason N/A via SNMP/SSH)"
+                    reload_method = "SYSUPTIME_ONLY"
 
         evidence = {
             "raw_sysuptime": snmp_res.raw_sysuptime,

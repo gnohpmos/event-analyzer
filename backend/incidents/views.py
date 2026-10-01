@@ -182,8 +182,11 @@ class DashboardSummaryView(APIView):
         total_active = device_down + link_down + flapping + stabilizing + recovery_check + verification_failed
 
         # Classification counts
+        power_outage_count = Incident.objects.filter(classification=Classification.POWER_OUTAGE_REBOOT).count()
         reboot_related = Incident.objects.filter(classification=Classification.DEVICE_REBOOT_RELATED).count()
         reboot_suspected = Incident.objects.filter(classification=Classification.DEVICE_REBOOT_SUSPECTED).count()
+        manual_reload_count = Incident.objects.filter(classification=Classification.MANUAL_RELOAD).count()
+        software_crash_count = Incident.objects.filter(classification=Classification.SOFTWARE_CRASH).count()
         connectivity_loss = Incident.objects.filter(classification=Classification.CONNECTIVITY_LOSS).count()
         unable_to_verify = Incident.objects.filter(classification=Classification.UNABLE_TO_VERIFY).count()
         link_flapping_count = Incident.objects.filter(classification=Classification.LINK_FLAPPING).count()
@@ -232,8 +235,11 @@ class DashboardSummaryView(APIView):
                 "total_active": total_active
             },
             "classifications": {
+                "power_outage_reboot": power_outage_count,
                 "device_reboot_related": reboot_related,
                 "device_reboot_suspected": reboot_suspected,
+                "manual_reload": manual_reload_count,
+                "software_crash": software_crash_count,
                 "connectivity_loss": connectivity_loss,
                 "unable_to_verify": unable_to_verify,
                 "link_flapping": link_flapping_count,

@@ -6,6 +6,8 @@ import {
   AlertOctagon, 
   HelpCircle,
   Zap,
+  ZapOff,
+  RotateCcw,
   WifiOff,
   Activity,
   Clock,
@@ -109,6 +111,36 @@ export const ClassificationBadge: React.FC<ClassificationBadgeProps> = ({ classi
   };
 
   switch (classification) {
+    case 'POWER_OUTAGE_REBOOT':
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <ZapOff className="w-3.5 h-3.5 text-amber-400" />
+            Power Outage (ไฟดับ)
+          </span>
+          {renderConfidence()}
+        </div>
+      );
+    case 'MANUAL_RELOAD':
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/25">
+            <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
+            Manual Reload
+          </span>
+          {renderConfidence()}
+        </div>
+      );
+    case 'SOFTWARE_CRASH':
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/25">
+            <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+            Software Crash
+          </span>
+          {renderConfidence()}
+        </div>
+      );
     case 'DEVICE_REBOOT_RELATED':
       return (
         <div className="inline-flex items-center gap-1.5">

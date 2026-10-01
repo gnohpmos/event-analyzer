@@ -46,9 +46,13 @@ def process_down_event(event: NetworkEvent, device: Device) -> dict:
         )
 
         if active_incident:
-            # Duplicate DOWN — don't create new incident
+            # Duplicate DOWN — update last seen and ensure status returns to DOWN if previously checking recovery
             active_incident.last_seen = event.event_time
-            active_incident.save(update_fields=['last_seen', 'updated_at'])
+            update_fields = ['last_seen', 'updated_at']
+            if active_incident.status in (IncidentStatus.RECOVERY_CHECK, IncidentStatus.VERIFICATION_FAILED, IncidentStatus.STABILIZING):
+                active_incident.status = IncidentStatus.DOWN
+                update_fields.append('status')
+            active_incident.save(update_fields=update_fields)
 
             # Link event to existing incident
             active_incident.link_event(event, RelationshipType.RELATED)
@@ -109,7 +113,7 @@ def process_down_event(event: NetworkEvent, device: Device) -> dict:
 def process_up_event(event: NetworkEvent, device: Device) -> dict:
     """
     FLOW B — Device UP.
-    1. Find active DOWN incident for device
+    1. Find active DOWN/RECOVERY_CHECK/VERIFICATION_FAILED incident for device
     2. If found → transition to RECOVERY_CHECK, dispatch SNMP verification
     3. If not found → log UP_WITHOUT_ACTIVE_INCIDENT (Edge Case 1)
     """
@@ -118,7 +122,11 @@ def process_up_event(event: NetworkEvent, device: Device) -> dict:
             Incident.objects
             .filter(
                 primary_device=device,
-                status=IncidentStatus.DOWN
+                status__in=[
+                    IncidentStatus.DOWN,
+                    IncidentStatus.RECOVERY_CHECK,
+                    IncidentStatus.VERIFICATION_FAILED
+                ]
             )
             .select_for_update()
             .first()
@@ -148,10 +156,12 @@ def process_up_event(event: NetworkEvent, device: Device) -> dict:
                 f"device={device.name} → RECOVERY_CHECK"
             )
 
-            # Dispatch SNMP Verification (async via Celery)
+            # Dispatch SNMP Verification (async via Celery with transaction.on_commit)
             try:
                 from verification.tasks import run_snmp_verification
-                run_snmp_verification.delay(active_incident.id)
+                transaction.on_commit(
+                    lambda inc_id=active_incident.id: run_snmp_verification.delay(inc_id)
+                )
                 logger.info(f"VERIFICATION_DISPATCHED: {active_incident.incident_number}")
             except Exception as e:
                 logger.error(f"VERIFICATION_DISPATCH_FAILED: {e}")
