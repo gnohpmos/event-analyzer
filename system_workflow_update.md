@@ -1,7 +1,7 @@
 # คู่มือการทำงานของระบบ Multi-Source Network Event & Incident Analysis Platform (ฉบับปรับปรุงล่าสุด)
-**System Workflow & Architecture Specification (Updated Edition)**
+**System Workflow & Architecture Specification (Updated Edition - October 2026)**
 
-เอกสารฉบับนี้อธิบาย **Workflow การทำงานของระบบ Multi-Source Network Event & Incident Analysis Platform** ทั้งหมดที่ได้รับการอัปเดต โดยครอบคลุมทั้งสถาปัตยกรรมหลัก, กลไก State Machine การคัดแยกความผิดปกติ, ระบบบูรณาการเชื่อมต่อ **IPGET API Suite** และ **TTS Trouble Ticket System** ล่าสุด, ระบบ Automated Verification, โครงสร้างฐานข้อมูลที่ขยายใหม่, การปรับปรุง User Interface (UI/UX) และมาตรการความทนทานต่อข้อผิดพลาด (Fault Tolerance)
+เอกสารฉบับนี้อธิบาย **Workflow การทำงานของระบบ Multi-Source Network Event & Incident Analysis Platform (EventAnalyzer)** ทั้งหมดที่ได้รับการอัปเดต โดยครอบคลุมทั้งสถาปัตยกรรมหลัก, กลไก State Machine การคัดแยกความผิดปกติ, ระบบบูรณาการเชื่อมต่อ **IPGET API Suite**, ระบบเปิดใบงาน **NT TTS Trouble Ticket Automation**, ระบบ **osTicket (MSTicket) Gateway** พร้อมกลไก **5-Layered Deduplication** และ **Circuit Peer Auto-Propagation**, ระบบ Automated Verification, โครงสร้างฐานข้อมูลที่ขยายใหม่, การปรับปรุง User Interface (UI/UX) และมาตรการความทนทานต่อข้อผิดพลาด (Fault Tolerance)
 
 ---
 
@@ -10,17 +10,18 @@
 2. [ขั้นตอนที่ 1: การรับสัญญาณและการสกัดข้อมูลมาตรฐาน (Ingestion & Normalization Layer)](#2-ขั้นตอนที่-1-การรับสัญญาณและการสกัดข้อมูลมาตรฐาน)
 3. [ขั้นตอนที่ 2: Core Dispatcher และ State Machine การจัดการ Incident](#3-ขั้นตอนที่-2-core-dispatcher-และ-state-machine-การจัดการ-incident)
 4. [ขั้นตอนที่ 3: ระบบตรวจพิสูจน์สาเหตุรากเหง้าอัตโนมัติ (Automated RCA & Verification Engine)](#4-ขั้นตอนที่-3-ระบบตรวจพิสูจน์สาเหตุรากเหง้าอัตโนมัติ)
-5. [ขั้นตอนที่ 4: สถาปัตยกรรมและการเชื่อมต่อ IPGET & TTS Integration Suite](#5-ขั้นตอนที่-4-สถาปัตยกรรมและการเชื่อมต่อ-ipget--tts-integration-suite)
-6. [ขั้นตอนที่ 5: มาตรการรักษาเสถียรภาพ ประสิทธิภาพ และการรับมือเมื่อ API ขัดข้อง (Resilience & Fault Tolerance)](#6-ขั้นตอนที่-5-มาตรการรักษาเสถียรภาพ-ประสิทธิภาพ-และการรับมือเมื่อ-api-ขัดข้อง)
-7. [ขั้นตอนที่ 6: การปรับปรุงการแสดงผลและ User Experience (Frontend UI/UX Optimization)](#7-ขั้นตอนที่-6-การปรับปรุงการแสดงผลและ-user-experience)
-8. [โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย (Database Schema Reference)](#8-โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย)
-9. [คู่มือการทดสอบ ตรวจสอบ และวินิจฉัยระบบ (System Verification & Diagnostic Guide)](#9-คู่มือการทดสอบ-ตรวจสอบ-และวินิจฉัยระบบ)
+5. [ขั้นตอนที่ 4: สถาปัตยกรรม IPGET & NT TTS Integration (พร้อม Ticket Policy & Historical Integrity)](#5-ขั้นตอนที่-4-สถาปัตยกรรม-ipget--nt-tts-integration)
+6. [ขั้นตอนที่ 5: สถาปัตยกรรม osTicket (MSTicket) Gateway & Circuit Peer Auto-Propagation](#6-ขั้นตอนที่-5-สถาปัตยกรรม-osticket-msticket-gateway--circuit-peer-auto-propagation)
+7. [ขั้นตอนที่ 6: มาตรการรักษาเสถียรภาพ ประสิทธิภาพ และ Fault Tolerance](#7-ขั้นตอนที่-6-มาตรการรักษาเสถียรภาพ-ประสิทธิภาพ-และ-fault-tolerance)
+8. [ขั้นตอนที่ 7: การปรับปรุงการแสดงผลและ User Experience (Frontend UI/UX Optimization)](#8-ขั้นตอนที่-7-การปรับปรุงการแสดงผลและ-user-experience)
+9. [โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย (Database Schema Reference)](#9-โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย)
+10. [คู่มือการทดสอบ ตรวจสอบ และวินิจฉัยระบบ (System Verification & Diagnostic Guide)](#10-คู่มือการทดสอบ-ตรวจสอบ-และวินิจฉัยระบบ)
 
 ---
 
 ## 1. ภาพรวมสถาปัตยกรรมระบบหลังการอัปเดต
 
-ระบบทำงานในรูปแบบ **Containerized Microservices Stack** บน Docker โดยแยกหน้าที่กันอย่างชัดเจน และเชื่อมต่อกับระบบภายนอกแบบ Non-blocking:
+ระบบทำงานในรูปแบบ **Containerized Microservices Stack 6 คอนเทนเนอร์** บน Docker โดยแยกหน้าที่กันอย่างชัดเจน และเชื่อมต่อกับระบบภายนอกแบบ Non-blocking:
 
 ```mermaid
 flowchart TD
@@ -33,6 +34,7 @@ flowchart TD
         IPGET_IF["IPGET API 1: Interface Alarm<br>/device/alarm/interface/<br>(Circuit NTID, Remote Peer, Speed)"]
         IPGET_NODE["IPGET API 2: Node Ping Alarm<br>/device/alarm/ping/<br>(Site Name, Province, Office)"]
         TTS_API["IPGET API 3: TTS listNTID<br>/tts/data/open/listNTID<br>(Ticket ID, Status, Team, GPS, Cause)"]
+        OSTICKET_API["osTicket REST API & Portal<br>msticket.catbb.net<br>(Trouble Ticket ID, Down Time, Topic CATMA)"]
         Routers["Physical Core/PE Routers<br>(SNMP sysUpTime / SSH IOS-XR)"]
     end
 
@@ -45,17 +47,23 @@ flowchart TD
         Dispatcher{"Core Dispatcher<br>dispatch_event()"}
         DevEngine["Device Incident Engine<br>(Router Reachability State Machine)"]
         LinkEngine["Link Incident Engine<br>(Flapping Protection & Hold-Down Soak)"]
+        OSTicketClient["OSTicketClient Gateway<br>(5-Layer Deduplication & Peer Propagation)"]
+        PolicyService["TicketPolicyService<br>(4-Point Eligibility Checker)"]
     end
 
     subgraph AsyncWorker["5. ระบบงานเบื้องหลัง (Celery Workers & Scheduler)"]
         CeleryWorker["Celery Worker (Concurrency 4)<br>- Automated Verification (SNMP/SSH)<br>- On-Demand Ticket Sync<br>- Soak Completion Check"]
-        CeleryBeat["Celery Beat Scheduler<br>- Continuous Soak Watcher (60s)<br>- Periodic TTS Background Sync (2m)"]
-        Redis[("Redis In-Memory Broker<br>& Results Backend")]
+        CeleryBeat["Celery Beat Scheduler<br>- Continuous Soak Watcher (60s)<br>- Periodic Cache Master & Ticket Sync (2m)"]
+        Redis[("Redis In-Memory Broker & Cache<br>(Alarm Index, Lock:Circuit, Cache-First)")]
     end
 
-    subgraph DataStore["6. ฐานข้อมูลและรายงาน (Persistence & Presentation)"]
-        Postgres[("PostgreSQL 15+ Database<br>Incidents, Events, Devices, Timeline")]
-        Frontend["React 18 SPA (Vite + Tailwind CSS)<br>- Dashboard Overview<br>- Compact Incidents View<br>- TTS Work Order Modal & Reports"]
+    subgraph HeadlessWorker["6. บริการเปิดตั๋วอัตโนมัติ (Headless TTS Automation)"]
+        TTSNode["eventanalyzer-tts (Port 8088)<br>Node.js Puppeteer Automation Service"]
+    end
+
+    subgraph DataStore["7. ฐานข้อมูลและรายงาน (Persistence & Presentation)"]
+        Postgres[("PostgreSQL 16 Database<br>Incidents, Events, Devices, Timeline")]
+        Frontend["React 18 SPA (Vite + Tailwind CSS)<br>- Dashboard Overview & RCA Breakdown<br>- Compact Incidents View with Ticket Badges<br>- Incident Detail Modal with Live Sync"]
     end
 
     Sources -->|HTTP POST Webhook| Nginx
@@ -74,20 +82,27 @@ flowchart TD
     CeleryWorker <-->|"Query SNMP / SSH"| Routers
     CeleryWorker <-->|"Query Interface Alarms"| IPGET_IF
     CeleryWorker <-->|"Query Node Ping Alarms"| IPGET_NODE
-    CeleryWorker <-->|"Query TTS Tickets (NTID or IP)"| TTS_API
+    CeleryWorker <-->|"Query TTS Tickets"| TTS_API
     CeleryWorker -->|"Update Enriched Data"| Postgres
+
+    OSTicketClient <-->|"REST API POST / Staff Search"| OSTICKET_API
+    PolicyService -->|"Evaluate Eligibility"| OSTicketClient
+    OSTicketClient <-->|"Lock & Peer Sync"| Redis
+    OSTicketClient -->|"Save osTicket Number"| Postgres
+    Backend -->|"Trigger Auto Creation"| TTSNode
+    TTSNode <-->|"Web Automation"| TTS_API
 
     Postgres <--> Nginx
     Nginx <--> Frontend
 ```
 
-### องค์ประกอบสำคัญของระบบ:
-1. **Nginx Reverse Proxy** (Port `8089`): ทำหน้าที่เป็น Single Entry Point สำหรับทั้ง Webhook Ingestion, Backend REST API และให้บริการ Static Assets ของ React Frontend
-2. **Backend API & Dispatcher** (`Django 5.x / DRF`): ทำหน้าที่ Ingest Event, รัน State Machine, คำนวณความเสถียร และให้บริการ REST API
-3. **Celery Worker & Beat** (`Celery 5.x`): แยกการประมวลผลงานหนัก เช่น SNMP/SSH Verification, Soak Timer 45 นาที และการเชื่อมโยงข้อมูล IPGET/TTS ออกจาก Webhook Thread
-4. **Redis 7.x**: จัดการ Message Queue ระหว่าง Django และ Celery Worker
-5. **PostgreSQL 15+**: จัดเก็บตารางข้อมูลเชิงสัมพันธ์ที่มี ACID Guarantee พร้อมรองรับ Concurrent Status Locks
-6. **Frontend SPA** (`React 18 / TypeScript / Vite / Tailwind`): นำเสนอข้อมูล Dashboard, ตาราง Incident แบบ Compact พร้อม Quick Actions, Modal แสดงรายละเอียดการซ่อม TTS และรายงานแบบ Hierarchical Drill-down
+### องค์ประกอบสำคัญของระบบ 6 คอนเทนเนอร์:
+1. **Nginx Reverse Proxy** (`eventanalyzer-frontend:80`, Host: `8089`): จุดเข้าใช้งานจุดเดียว ทำหน้าที่ Route ข้อมูลไปยัง Frontend Static Assets, Django Backend API (`/api/`) และ Admin Portal
+2. **Backend API & Dispatcher** (`eventanalyzer-backend:8000`): รันด้วย Django 5.0 + DRF + Gunicorn ทำหน้าที่ Core Ingestion, State Machines, osTicket Gateway, Ticket Policy Evaluation และ REST API
+3. **Celery Worker & Beat** (`eventanalyzer-celery`): รัน Celery 5.4 แยกประมวลผลงานหนัก เช่น SNMP Verification, 45-minute Soak Timer, IPGET Cache Master Sync (ทุก 2 นาที) และ Background Peer Sync
+4. **Redis 7.x** (`eventanalyzer-redis:6379`): ทำหน้าที่เป็น Message Queue, Distributed Lock (`lock:osticket_open:circuit:{cid}`) และ Cache-First Layer สำหรับข้อมูล Interface Alarms
+5. **PostgreSQL 16** (`eventanalyzer-db:5432`): ฐานข้อมูลหลักพร้อม Transactional Integrity (`select_for_update`) สำหรับจัดการสถานะ Incident และ Audit Timeline
+6. **TTS Automation Service** (`eventanalyzer-tts:8088`): รัน Node.js + Express + Chromium Puppeteer สำหรับให้บริการเปิดใบงานแจ้งซ่อมบนระบบ NT TTS อัตโนมัติ
 
 ---
 
@@ -99,7 +114,7 @@ flowchart TD
 sequenceDiagram
     autonumber
     participant PRTG as PRTG Network Monitor
-    participant Webhook as Webhook View (/prtg/webhook/)
+    participant Webhook as Webhook View (/prtg/events/)
     participant Adapter as PRTGAdapter (Normalizer)
     participant DB as PostgreSQL (NetworkEvent)
     participant Dispatcher as Core Dispatcher
@@ -128,18 +143,6 @@ Core Dispatcher (`backend/events/engine.py`) จะตรวจสอบ `event.
 
 ### 3.1 Device Reachability Engine (เมื่อเราเตอร์หลักดับ)
 มุ่งเน้นการตรวจจับการขาดหายไปของอุปกรณ์ (Node Down) และการป้องกันปัญหาเปิดเคสซ้ำซ้อน:
-
-```mermaid
-stateDiagram-v2
-    [*] --> DOWN : รับ Event Ping DOWN ครั้งแรก
-    DOWN --> DOWN : รับ Ping DOWN ซ้ำ (บันทึก DOWN_REPEAT)
-    DOWN --> RECOVERY_CHECK : รับ Event Ping UP กลับมา
-    RECOVERY_CHECK --> RECOVERED : Automated Verification ตรวจสอบผ่าน
-    RECOVERY_CHECK --> MANUAL_REVIEW_REQUIRED : ตรวจสอบล้มเหลว / SNMP Timeout
-    RECOVERED --> [*]
-    MANUAL_REVIEW_REQUIRED --> RECOVERED : ผู้ดูแลระบบปรับสถานะผ่าน Quick Action
-```
-
 * **De-duplication**: หากได้รับ Ping DOWN ซ้ำในขณะที่ Incident เดิมยังไม่ปิด ระบบจะบันทึก Timeline เป็น `DOWN_REPEAT` โดยไม่เปิด Incident ใหม่
 * **Recovery Trigger**: เมื่อได้รับสัญญาณ Ping UP ระบบจะเปลี่ยนสถานะเป็น `RECOVERY_CHECK` และเรียกใช้งาน Automated Verification Engine แบบ Asynchronous
 
@@ -168,321 +171,198 @@ flowchart TD
     SoakCheck -- "นิ่งครบ 45 นาทีต่อเนื่อง" --> CloseLink["ปิด Incident ➔ RECOVERED<br/>- flap_count >= 2: LINK_FLAPPING<br/>- Downtime >= 15m: PHYSICAL_LINK_FAILURE<br/>- อื่นๆ: TRANSIENT_GLITCH"]
 ```
 
-#### สรุป 4 กฎเหล็กของ Link Engine:
-1. **Parent Device Correlation (Suppression)**: เมื่อเราเตอร์แม่ดับ พอร์ตทั้งหมดใต้เราเตอร์จะดับตาม ระบบจะไม่สแปมเปิด Link Incident นับร้อยรายการ แต่จะจัดกลุ่มเป็น Child ภายใต้เหตุการณ์ของเราเตอร์หลัก
-2. **Flapping Window (30 นาที)**: หากพอร์ตเกิดหลุดหรือติดซ้ำภายในช่วง 30 นาที ระบบจะรวมอยู่ใน Incident เดียวกัน (`LNK-...`) และนับรอบ `flap_count += 1`
-3. **Continuous UP Soak Timer (45 นาที)**: เมื่อพอร์ตกลับมาติด (UP) ระบบจะยังไม่ปิดเคสทันที แต่จะให้อยู่ในสถานะ `STABILIZING` เป็นเวลา 45 นาที เพื่อเฝ้าดูความเสถียร
-4. **Flap Reset on DOWN**: หากในระหว่าง 45 นาที พอร์ตหลุดลงไปอีกแม้แต่วินาทีเดียว ระบบจะยกเลิกเวลารอดูอาการทันที, คำนวณ Net Downtime สะสม และกลับไปนับรอบ Flap เพิ่ม
-
 ---
 
 ## 4. ขั้นตอนที่ 3: ระบบตรวจพิสูจน์สาเหตุรากเหง้าอัตโนมัติ
 
 ระบบมีโมดูล **Automated RCA & Verification Engine** (`backend/verification/`) เพื่อค้นหาสาเหตุที่แท้จริงของการหยุดทำงานของเครือข่าย โดยใช้ Strategy Pattern:
-
-```mermaid
-flowchart TD
-    Trigger["Incident เข้าสู่สถานะ RECOVERY_CHECK / STABILIZING"] --> StratSelect{"ประเภทของ Incident"}
-    
-    StratSelect -- "DEVICE (Router Down)" --> PingCheck["ยิง ICMP Ping ยืนยัน Reachability"]
-    PingCheck --> SNMPQuery["ส่งคำสั่ง SNMP sysUpTime.0 (OID: 1.3.6.1.2.1.1.3.0)"]
-    
-    SNMPQuery --> EvalUptime{"ผลลัพธ์ Uptime ของเราเตอร์"}
-    EvalUptime -- "Uptime < 3,600 วินาที<br/>(เพิ่งสตาร์ตเครื่องใหม่)" --> RebootPath["เราเตอร์รีบูตจริง (Reboot Detected)"]
-    EvalUptime -- "Uptime > เวลาที่ดับ<br/>(เครื่องไม่เคยดับ)" --> ConnLoss["เครือข่ายขัดข้องภายนอก<br/>RCA: CONNECTIVITY_LOSS (High Conf)"]
-    EvalUptime -- "SNMP Timeout / Error" --> Unverified["ไม่สามารถเชื่อมต่อได้<br/>RCA: UNABLE_TO_VERIFY"]
-
-    RebootPath --> CheckOS{"ระบบปฏิบัติการเราเตอร์"}
-    CheckOS -- "Cisco IOS-XR" --> SSHCommand["ยิง SSH พอร์ต 22 รันคำสั่ง<br/>'show reboot-history'"]
-    CheckOS -- "Cisco IOS-XE / อื่นๆ" --> SNMPWhyReload["ดึง OID whyReload หรือ 'show version'"]
-    
-    SSHCommand --> ParseReason{"พบเหตุผลการ Reload หรือไม่?"}
-    SNMPWhyReload --> ParseReason
-    ParseReason -- "พบ เช่น Power Loss, Kernel Crash" --> Confirmed["RCA: DEVICE_REBOOT_RELATED (High Conf)"]
-    ParseReason -- "ไม่พบข้อความชัดเจน" --> Suspected["RCA: DEVICE_REBOOT_SUSPECTED (Medium Conf)"]
-
-    StratSelect -- "LINK (Interface Down)" --> IFMIB["ยิง SNMP IF-MIB (ifOperStatus / ifAdminStatus)"]
-    IFMIB --> VerifyLink["ยืนยันสถานะพอร์ตและบันทึกลง Incident Timeline"]
-```
+* **SNMP sysUpTime Verification**: ตรวจสอบ Uptime ของเราเตอร์หลังจาก Ping กลับมาติด หาก Uptime < 3,600 วินาที แสดงว่าเครื่องเพิ่งสตาร์ตใหม่จากการรีบูต (Reboot) แต่หาก Uptime ยาวนานต่อเนื่องแสดงว่าเกิดจากสายสัญญาณขาดภายนอก (`CONNECTIVITY_LOSS`)
+* **SSH IOS-XR Automation**: กรณีอุปกรณ์เป็น Cisco IOS-XR ระบบสามารถล็อกอินผ่าน SSH รันคำสั่ง `show reboot-history` หรือตรวจสอบ OID `whyReload` เพื่อระบุสาเหตุการรีโหลดได้อย่างแม่นยำ (เช่น Power Outage, Kernel Panic, User Reload)
 
 ---
 
-## 5. ขั้นตอนที่ 4: สถาปัตยกรรมและการเชื่อมต่อ IPGET & TTS Integration Suite
+## 5. ขั้นตอนที่ 4: สถาปัตยกรรม IPGET & NT TTS Integration
 
-ระบบได้รับการขยายขีดความสามารถในการเชื่อมต่อกับ **IPGET Network Monitoring & Alarm API** (`http://10.199.47.38`) ครบทั้ง 3 API:
+ระบบเชื่อมต่อกับ **IPGET Network Monitoring Suite** และ **NT TTS Trouble Ticket System** ด้วยสถาปัตยกรรม Cache-First:
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant System as Incident Engine / Celery
-    participant IPGET_IF as IPGET API 1 (/device/alarm/interface/)
-    participant IPGET_PING as IPGET API 2 (/device/alarm/ping/)
-    participant TTS as IPGET API 3 (/tts/data/open/listNTID)
-    participant DB as Incidents Database
+    participant Engine as Incident Engine
+    participant Cache as Redis Cache (Master)
+    participant IPGET as IPGET API Gateway
+    participant TTS as NT TTS System
+    participant Policy as TicketPolicyService
+    participant DB as PostgreSQL Database
 
-    Note over System, DB: กรณีที่ 1: Link Incident (สายสัญญาณ/พอร์ตล่ม)
-    System->>IPGET_IF: POST {"interval_hour": 24, "layer": "L3", "group_name": "..."}
-    IPGET_IF-->>System: รายการ Alarms พร้อม cat_id, destname, destport, site_name
-    System->>System: แมปด้วย (Device IP, Canonical Port) หรือ (Hostname, Canonical Port)
-    System->>DB: บันทึก circuit_id, remote_device, site_name
-    System->>TTS: POST {"ntid": [circuit_id]}
-    TTS-->>System: Trouble Ticket Data (INCIDENT_ID, IM_STATUS, REPAIRTEAM, GPS, CAUSE)
-    System->>DB: บันทึก ticket_id_tss, tts_status, repair_team, actual_cause, resolution, GPS
+    Note over Cache, IPGET: Cache Master Task (ทุกๆ 2 นาที)
+    Cache->>IPGET: Fetch Interface & Node Alarms (force_refresh=True)
+    IPGET-->>Cache: เก็บ Index (IP, Canonical Port) ลง Redis
 
-    Note over System, DB: กรณีที่ 2: Device Incident (เราเตอร์หลักดับ)
-    System->>IPGET_PING: POST {"interval_hour": 72, "layer": "L3"}
-    IPGET_PING-->>System: รายการ Node Alarms พร้อม site_name, province, cat_office_name
-    System->>DB: บันทึก site_name ของเราเตอร์
-    System->>TTS: POST {"ntid": [device_ip, device_name, sys_name]}
-    TTS-->>System: Trouble Ticket Data ของอุปกรณ์ Down
-    System->>DB: บันทึก ticket_id_tss, tts_status, repair_team, actual_cause, GPS
-```
-
-### รายละเอียดของแต่ละ API ใน Suite:
-
-#### API 1: Interface Alarm Info (`/device/alarm/interface/`)
-* **หน้าที่**: ค้นหาข้อมูลเชิงลึกของวงจรที่พอร์ตดับ
-* **Payload ที่ส่ง**: `{"layer": "L3", "group_name": "bangkok, central, north...", "interval_hour": 24}`
-* **ข้อมูลที่สกัดได้**:
-  * `circuit_id`: รหัสวงจร NTID (เช่น `TBB001234`, `308123456`)
-  * `remote_device` & `remote_interface`: อุปกรณ์และพอร์ตปลายทาง (`destname`, `destport`)
-  * `site_name`: ชื่อชุมสาย/สถานีของพอร์ต
-
-#### API 2: Node Ping Info (`/device/alarm/ping/`)
-* **หน้าที่**: ค้นหาข้อมูลเชิงลึกของชุมสายและสถานีฐานเมื่อเราเตอร์ดับ
-* **Payload ที่ส่ง**: `{"layer": "L3", "group_name": "...", "interval_hour": 72}`
-* **ข้อมูลที่สกัดได้**:
-  * `site_name`: ชื่อชุมสาย/สถานีฐาน
-  * `province`: จังหวัดที่ตั้ง
-  * `cat_office_name`: ศูนย์บริการโทรคมนาคมที่ดูแล
-
-#### API 3: TTS Trouble Ticket System by NTID (`/tts/data/open/listNTID`)
-* **หน้าที่**: ดึงข้อมูลใบสั่งงานแจ้งซ่อมบำรุง (Trouble Ticket) ของ ITSM
-* **การรองรับ Dual-Mode Query**:
-  1. **สำหรับ Link Incident**: ส่งค้นหาด้วย **Circuit NTID** (`ntid=[circuit_id]`)
-  2. **สำหรับ Device Incident**: ส่งค้นหาด้วย **Device IP / Hostname Candidates** (`ntid=[device_ip, device_name, sys_name]`)
-* **ข้อมูลที่สกัดและจัดเก็บ**:
-  * `ticket_id_tss`: หมายเลข Ticket แจ้งซ่อม (เช่น `INC20260929-0012`)
-  * `tts_status`: สถานะงานแก้ (เช่น `Work In Progress`, `Resolved`, `Closed`)
-  * `repair_team`: ทีมช่างผู้รับผิดชอบงานแก้
-  * `response_department`: หน่วยงานต้นสังกัด
-  * `actual_cause`: สาเหตุจริงของปัญหา (Parsed จาก `CAUSE_DETAIL` / `CAUSE_GROUP`)
-  * `resolution`: วิธีการแก้ไข / ผลการซ่อมบำรุง
-  * `source_gps` & `dest_gps`: พิกัด GPS ต้นทางและปลายทาง สกัดจากข้อความ Location ใน Description
-
----
-
-### กลไกการ Sync ข้อมูล (Synchronization Workflows)
-
-ระบบแบ่งการ Sync ข้อมูลออกเป็น 2 รูปแบบเพื่อความยืดหยุ่นและประสิทธิภาพสูงสุด:
-
-```mermaid
-flowchart LR
-    subgraph Scheduled["1. รอบการทำงานอัตโนมัติ (Periodic Sync)"]
-        Cron["Celery Beat Task ทุกๆ 2 นาที<br>sync_pending_tss_tickets_task"]
-        QueryPending["ค้นหาเคสที่ยังไม่มี ticket_id_tss<br>(Active หรือสร้างใน 24 ชม.)"]
-        BatchSync["ดึงข้อมูล Alarms และ TTS แบบกลุ่ม<br>บันทึกลงฐานข้อมูล"]
-        StopPoll["เมื่อได้ Ticket แล้ว ➔ ยุติการ Polling เคสนั้นทันที"]
-        Cron --> QueryPending --> BatchSync --> StopPoll
-    end
-
-    subgraph OnDemand["2. การเรียกข้อมูลทันใจ (On-Demand Sync)"]
-        UserClick["ผู้ใช้กดปุ่ม 'Sync TSS' บน Modal<br>หรือเปิดหน้า Incident Detail"]
-        APICall["POST /api/v1/incidents/{id}/sync-ticket/"]
-        WorkerExec["Celery Task ดึงข้อมูลล่าสุดทันที<br>(ทั้ง Ticket ID, สถานะงานแก้, สาเหตุจริง)"]
-        UIUpdate["หน้าจอ Modal อัปเดตข้อมูลแบบ Real-time"]
-        UserClick --> APICall --> WorkerExec --> UIUpdate
+    Note over Engine, DB: การประเมินและผูกตั๋ว NT TTS
+    Engine->>Cache: Match Alarm ด้วย (IP, Port) (Cache-First)
+    Cache-->>Engine: ข้อมูล Circuit NTID, Site Name, Remote Device
+    Engine->>Policy: evaluate_eligibility(incident)
+    Note over Policy: ตรวจสอบ 4 กฎเหล็ก:<br/>1. มี Alarm ยืนยันใน IPGET<br/>2. มี Circuit ID ชัดเจน<br/>3. Down ต่อเนื่อง >= 15 นาที<br/>4. ยังไม่มีตั๋วเดิมเปิดอยู่
+    
+    alt เคสใหม่ยังไม่มีตั๋ว
+        Policy-->>Engine: is_eligible = True
+        Engine->>TTS: POST /api/v1/incidents/{id}/open-ticket/
+        TTS-->>Engine: ได้หมายเลขตั๋ว NT TTS (เช่น SD26100950)
+        Engine->>DB: บันทึก ticket_id_tss, tts_status='Open'
+    else ตรวจพบตั๋วเดิมในระบบ
+        Engine->>DB: นำเลขตั๋วเดิมมาผูก และอัปเกรดสถานะ
     end
 ```
 
+### การปกป้องความถูกต้องของข้อมูลประวัติตั๋วย้อนหลัง (Historical Data Integrity):
+1. **Stale Completed Ticket Skip**: เมื่อตรวจสอบข้อมูลย้อนหลังจาก TTS API หากพบว่าตั๋วของวงจรนั้นมีสถานะ `Complete`, `Closed`, หรือ `Resolved` โดยมีเวลา `FAULT_DATE` ก่อนเวลาที่ Incident ปัจจุบัน Down เกิน 6 ชั่วโมง ระบบจะไม่นำตั๋วเก่าที่ปิดไปแล้วมาผูกซ้ำ
+2. **Smart Ticket Upgrade**: หาก Incident กำลัง Active อยู่ และมีตั๋วใหม่สถานะ `Work In Progress` เกิดขึ้นในระบบ ระบบจะอัปเกรดเลขตั๋วรอบปัจจุบันให้เป็นตั๋วล่าสุดทันที
+3. **No Overwrite on History**: Incident เก่าในอดีตที่ปิดสถานะเป็น `RECOVERED` ไปแล้ว จะไม่มีการแก้ไขหรือเขียนทับเลขตั๋วเดิมของตนเองโดยเด็ดขาด ข้อมูลประวัติการ Down แต่ละครั้งยังคงบันทึกเลขตั๋วแยกกันอย่างถูกต้อง 100%
+
 ---
 
-## 6. ขั้นตอนที่ 5: มาตรการรักษาเสถียรภาพ ประสิทธิภาพ และการรับมือเมื่อ API ขัดข้อง
+## 6. ขั้นตอนที่ 5: สถาปัตยกรรม osTicket (MSTicket) Gateway & Circuit Peer Auto-Propagation
 
-การเพิ่มการเชื่อมต่อ API ภายนอก (โดยเฉพาะ TTS ที่ต้องค้นหาฐานข้อมูล ITSM ส่วนกลาง) มีการออกแบบสถาปัตยกรรมป้องกันความเสี่ยง (Resilience & Fault Tolerance) อย่างเข้มงวด:
+เพื่อเชื่อมโยงระบบ Incident เข้ากับระบบ Helpdesk กลางขององค์กร (**MSTicket: `https://msticket.catbb.net/`**) ระบบได้พัฒนาโมดูล [`backend/integrations/osticket/`](file:///root/container/event-analyzer/backend/integrations/osticket/) ขึ้นมาโดยเฉพาะ:
 
 ```mermaid
 flowchart TD
-    Incoming["Webhook PRTG ส่งเข้ามา"] --> AsyncSave["1. Non-Blocking Ingestion<br>บันทึก Incident และตอบ HTTP 200 ทันที (Under 15ms)<br>ไม่รอผลของ IPGET/TTS ใน Webhook Request"]
-    
-    AsyncSave --> CeleryQueue["2. ส่งเข้า Celery Background Queue"]
-    
-    CeleryQueue --> CallAPI["3. Celery Worker เรียก IPGET / TTS API"]
-    
-    CallAPI --> CheckResp{"สถานะการตอบกลับของ API"}
-    
-    CheckResp -- "ปกติ (HTTP 200)" --> EnrichData["สกัดข้อมูลใบสั่งงานและบันทึกสมบูรณ์"]
-    
-    CheckResp -- "Timeout / 500 / Down" --> SafeFallback["4. Graceful Fallback & Circuit Breaker<br>- ตั้ง Timeout: 6s (Alarms), 25s (TTS)<br>- ไม่ทำให้ Celery Worker หรือระบบหลัก Crash<br>- บันทึก Error Log และข้ามไปเคสถัดไป"]
-    
-    SafeFallback --> WaitingBadge["หน้าเว็บแสดง Badge 'Waiting TSS...' ตามปกติ<br>ฟังก์ชัน Core (Flapping, RCA, Downtime) ทำงานได้ 100%"]
-    
-    WaitingBadge --> RetryLater["รอบถัดไป (อีก 2 นาที) ระบบจะกลับมาลองเชื่อมต่อใหม่"]
+    subgraph Trigger["1. จุดเริ่มต้นการเปิดตั๋ว osTicket"]
+        A["NOC กดปุ่ม 'เปิด osTicket' บนหน้าเว็บ<br/>หรือเรียก API /open-osticket/"] --> B["OSTicketClient.open_ticket()"]
+    end
+
+    subgraph Protection["2. ระบบป้องกันการเปิดซ้ำ 5 ชั้น (5-Layered Deduplication)"]
+        B --> L1["Layer 1 & 3: select_for_update Check<br/>ตรวจสอบว่า incident.ticket_id_osticket มีอยู่แล้วหรือไม่<br/>และตั้งสถานะเป็น PENDING_CREATION"]
+        L1 --> L2["Layer 2: Redis Distributed Lock<br/>lock:osticket_open:circuit:{cid} (Timeout 60s)<br/>บล็อกไม่ให้ Process อื่นเปิดตั๋วในวงจรเดียวกันพร้อมกัน"]
+        L2 --> L4["Layer 4: Active Circuit Ticket Check<br/>ค้นหาว่ามี Incident อื่นในวงจรเดียวกันมีตั๋วเปิดอยู่แล้วหรือไม่"]
+        L4 -- "พบตั๋วเดิมในระบบ" --> ReuseLocal["นำเลขตั๋วเดิมมาผูกทันที"]
+        L4 -- "ยังไม่มีในระบบ" --> L45["Layer 4.5: Real-time Staff Search<br/>OSTicketSearcher ค้นหาบน Staff Portal ด้วยเลข CAT TTS"]
+        L45 -- "พบตั๋วที่ NOC เปิดไว้แล้ว" --> ReuseRemote["นำเลขตั๋วของ NOC มาผูกทันที"]
+        L45 -- "ไม่พบตั๋วใดๆ" --> CreateNew["สร้าง Payload ผ่าน OSTicketPayloadBuilder"]
+    end
+
+    subgraph Execution["3. ส่งข้อมูลและบันทึกผล"]
+        CreateNew --> PostAPI["POST /osticket/api/tickets.json<br/>- Help Topic: CATMA TTS (27)<br/>- SLA: 10, Priority: Normal<br/>- Down Time: UTC Datetime (+7 Adjusted)<br/>- Form 2: Ticket Details"]
+        PostAPI --> NewTicket["ได้เลขตั๋วใหม่ (เช่น NT002843)"]
+        NewTicket --> SaveMain["บันทึกลง Incident ต้นทาง"]
+        ReuseLocal --> SaveMain
+        ReuseRemote --> SaveMain
+    end
+
+    subgraph PeerPropagation["4. ⚡ Circuit Peer Auto-Propagation (หัวใจสำคัญ)"]
+        SaveMain --> Propagate["OSTicketClient.propagate_ticket_to_peers()"]
+        Propagate --> FindPeers["ค้นหา Incident คู่ขนานของวงจรเดียวกันที่ยัง Active<br>(Q(circuit_id=cid) | Q(ticket_id_tss=tts))"]
+        FindPeers --> UpdatePeers["อัปเดต ticket_id_osticket และ osticket_status = 'Open'<br>ลง Incident ฝั่งตรงข้ามทันทีโดยอัตโนมัติ"]
+        UpdatePeers --> AddTimeline["บันทึก EventTimeline (OSTICKET_LINKED) ทั้ง 2 ฝั่ง"]
+    end
 ```
 
-### สรุป 5 เสาหลักด้านความปลอดภัยของ API Integration:
-1. **Asynchronous Non-blocking Architecture**: กระบวนการรับ Webhook และการตรวจจับ Flapping จะไม่มีการเรียก Network I/O ไปยัง IPGET โดยเด็ดขาด ทำให้ Webhook ตอบสนองในเวลา $< 15$ ms เสมอ
-2. **Strict Timeout Budgets**: กำหนด Timeout ไว้ที่ 6 วินาทีสำหรับ Interface/Node Alarm และ 25 วินาทีสำหรับ TTS API ป้องกันปัญหา Worker Thread ค้าง
-3. **Graceful Degradation**: หาก IPGET หรือ TTS ล่ม ออฟไลน์ หรือส่ง HTTP 500 ระบบจะจับ Exception และทำงานต่อไปโดยไม่ทำให้ระบบ Incident หยุดชะงัก
-4. **Polling Optimization**: เมื่อเคสใดได้รับการแมป Ticket ID สำเร็จแล้ว ระบบจะหยุดส่ง Query หาเคสนั้นใน Periodic Task ทันที ช่วยประหยัด Network Bandwidth
-5. **No SLA/MTTR Dependency**: การคำนวณ Downtime ของระบบจะไม่ผูกติดกับเวลาปิดของ TTS ทำให้ข้อมูลเชิงเทคนิคของ Network ยังคงถูกต้องและเป็นอิสระ
+### รายละเอียดฟังก์ชันสำคัญของ osTicket Gateway:
+1. **Circuit Peer Auto-Propagation**:
+   - ในโครงสร้างเครือข่าย วงจร Point-to-Point เมื่อเกิด Down จะสร้าง Incident ขึ้น 2 รายการสำหรับอุปกรณ์หัว-ท้าย (Node A และ Node B)
+   - เมื่อเจ้าหน้าที่กดเปิดตั๋ว osTicket ที่ฝั่งใดฝั่งหนึ่ง ระบบจะ **ค้นหา Incident คู่ขนานของวงจรเดียวกัน (`circuit_id` หรือ `ticket_id_tss` เดียวกัน) และนำเลขตั๋ว osTicket ไปบันทึกให้อีกฝั่งโดยอัตโนมัติทันที** ทั้งสองฝั่งจึงแสดงผลตั๋วตรงกันเสมอ
+2. **Background & On-Demand Fallback Sync**:
+   - ใน [`IncidentEnrichmentService`](file:///root/container/event-analyzer/backend/incidents/services/enrichment_service.py) ฟังก์ชัน `_enrich_single_link` จะตรวจเช็กว่าหาก Incident ตัวใดยังไม่มี `ticket_id_osticket` จะทำการดึงเลขตั๋วจาก Peer Incident หรือค้นหาตรงไปยัง osTicket เพื่อนำมาผูกให้อัตโนมัติ
+   - เมื่อกดปุ่ม **"ซิงค์ Ticket"** ใน Modal หน้าบ้าน ข้อมูล `ticket_id_osticket` จะได้รับการอัปเดตแบบ Real-time
+3. **Timezone Precision (+7 UTC Conversion)**:
+   - ฟังก์ชัน `OSTicketPayloadBuilder.format_down_time()` จะแปลงเวลาเหตุการณ์ Down จากเวลาไทย (Asia/Bangkok) ให้เป็นเวลาสากล **UTC (`%Y-%m-%d %H:%M:%S`)** ก่อนส่งไปยัง REST API
+   - เมื่อ PHP Engine ของ osTicket แสดงผลผ่าน Staff Web Portal จะทำการบวกชดเชย +7 ชั่วโมงเข้าสู่เวลาท้องถิ่นไทย ทำให้ค่า **`Down Time` บนหน้าเว็บ osTicket แสดงผลตรงกับเวลาที่เกิดเหตุจริง 100% ไม่เลื่อนไปข้างหน้า 7 ชม. อีกต่อไป**
 
 ---
 
-## 7. ขั้นตอนที่ 6: การปรับปรุงการแสดงผลและ User Experience
+## 7. ขั้นตอนที่ 6: มาตรการรักษาเสถียรภาพ ประสิทธิภาพ และ Fault Tolerance
 
-การแสดงผลหน้า **Incidents Management View** ([`IncidentsView.tsx`](file:///root/container/event-analyzer/frontend/src/components/IncidentsView.tsx)) ได้รับการปรับปรุงเพื่อลดการกินพื้นที่แนวนอน และแสดงข้อมูลงานซ่อม TTS อย่างครบถ้วน:
+การเชื่อมต่อกับระบบภายนอก (IPGET, NT TTS, osTicket) มีการออกแบบเพื่อป้องกันความเสี่ยงอย่างเข้มงวด:
+1. **Asynchronous Non-blocking Ingestion**: การรับ Webhook จาก PRTG จะไม่รอผลจากภายนอก โดยบันทึก Event ลงฐานข้อมูลและตอบกลับ PRTG ด้วย `HTTP 200` ภายในเวลา $< 15$ ms เสมอ
+2. **Strict Timeout Budgets**: กำหนด Timeout ไว้ที่ 6 วินาทีสำหรับ IPGET Alarms, 25 วินาทีสำหรับ TTS API, และ 30 วินาทีสำหรับ osTicket API ป้องกันปัญหา Worker Thread ค้าง
+3. **Distributed Locking**: ป้องกัน Race Condition เมื่อมีการกดยิงเปิดตั๋วพร้อมกัน หรือมี Event ซ้ำเข้ามาในเสี้ยววินาทีเดียวกันด้วย Redis Lock
+4. **Graceful Fallback**: หากระบบภายนอกขัดข้อง ช้า หรือตอบสนองด้วย HTTP Error ระบบจะบันทึกสถานะ `FAILED_NEEDS_VERIFY` หรือข้ามไปทำงานรอบถัดไป โดยไม่ทำให้ระบบ Core Incident หรือการคำนวณ Downtime เสียหาย
 
-```mermaid
-flowchart TD
-    subgraph OldDesign["ดีไซน์เดิม (กินพื้นที่ ~300px)"]
-        OldRow["StatusBadge เดิม + Quick Action Select (จัดวางแนวนอน)"]
-    end
+---
 
-    subgraph NewDesign["ดีไซน์ใหม่ (ประหยัดพื้นที่ เหลือ ~115px-125px)"]
-        NewStack["StatusBadge (Compact)<br/>↕ (จัดวางแนวตั้ง Stacking)<br/>Quick Action Select (Compact)"]
-    end
+## 8. ขั้นตอนที่ 7: การปรับปรุงการแสดงผลและ User Experience
 
-    OldDesign -->|"ลดพื้นที่แนวนอนลงกว่า 55%"| NewDesign
-```
+การแสดงผลหน้า **Incidents Management View** ([`IncidentsView.tsx`](file:///root/container/event-analyzer/frontend/src/components/IncidentsView.tsx)) และ Modal รายละเอียด:
 
-### 1. การปรับแต่งคอลัมน์ "Status & Action":
-* **Vertical Stacking Layout**: เปลี่ยนการจัดวาง `StatusBadge` และเมนูเปลี่ยนสถานะด่วน (`<select>`) จากแนวนอนเป็นแนวตั้ง (`flex flex-col items-start gap-1`)
-* **Compact StatusBadge**: ลดขนาด Padding เป็น `px-2 py-0.5` และตัวหนังสือ `text-[11px]` พร้อมย่อข้อความ เช่น `STABILIZING (SOAK)` $\rightarrow$ `STABILIZING`, `RECOVERY CHECK` $\rightarrow$ `RECOVERY`, `MANUAL REVIEW` $\rightarrow$ `MANUAL`
-* **Compact Quick Action**: ปรับฟอนต์เป็น `text-[10px]` พร้อมตัวเลือกย่อ (`Set DOWN`, `Set FLAPPING`, `Set STABILIZING`, `Set RECOVERY`, `Set RECOVERED`, `Set MANUAL`)
-* **ผลลัพธ์**: คอลัมน์ลดความกว้างลงจาก ~300px เหลือเพียง **~115px - 125px** (ประหยัดพื้นที่แนวนอนไปได้มากกว่า **55%**) ทำให้ตารางมีพื้นที่แสดง Device & Target และ Timelines กว้างขึ้นอย่างเห็นได้ชัด
+### 1. การแสดงตั๋วคู่ (Dual Ticket Badges):
+* **NT TTS Ticket Badge**: กล่องสีส้มทองแสดงหมายเลขใบงาน เช่น `SD26096232` พร้อมป้ายสถานะ `OPEN` หรือ `WIP`
+* **osTicket Badge**: กล่องสีน้ำเงินเข้มพร้อมไอคอนตั๋ว แสดงหมายเลข `NT002843` พร้อมป้ายสถานะ `OPEN` และสามารถคลิกเพื่อเปิดหน้าเว็บ `msticket.catbb.net` ได้โดยตรง
+* ทั้งอุปกรณ์ต้นทางและปลายทางของวงจรเดียวกัน จะแสดงป้ายตั๋วทั้งสองใบตรงกันเสมอ
 
-### 2. Badge และข้อมูลที่แสดงเพิ่มเติมในตาราง:
-* **Incident Type Badge**: แสดงแท็ก `LINK` (สีฟ้าอมเขียว) หรือ `DEVICE` (สีน้ำเงิน)
-* **TSS Ticket Badge**: แสดงกล่องสีส้มทองพร้อมไอคอนตั๋ว (`ticket_id_tss`) และแท็กสถานะ TTS แบบ Real-time เช่น `WIP`, `Resolved` หากยังไม่มีจะแสดงเป็น Pulse `Waiting TSS...`
-* **Site & Circuit Badges**: แสดงแท็ก `SITE` (ชื่อชุมสาย) และแท็ก `CKT` (รหัสวงจร) พร้อมอุปกรณ์ปลายทาง (`⇄ Remote Device`) และทีมช่างที่รับผิดชอบ
+### 2. Compact Vertical Stacking Layout:
+* ปรับปรุงคอลัมน์ "Status & Action" เป็นแนวตั้ง ลดความกว้างจาก ~300px เหลือเพียง **~120px** (ประหยัดพื้นที่แนวนอนไปได้มากกว่า **55%**)
 
 ### 3. TTS Work Order Card ใน Incident Detail Modal:
-เมื่อคลิกดูรายละเอียดของ Incident จะพบการ์ดข้อมูลการซ่อมบำรุง TTS ที่ครบถ้วน:
-* สถานะงานแก้ (Work Order Status)
-* ทีมช่างผู้รับผิดชอบ (`repair_team`) และหน่วยงานที่รับผิดชอบ (`response_department`)
-* พิกัด GPS ต้นทางและปลายทาง (`source_gps`, `dest_gps`)
-* การ์ดย่อยสรุป **สาเหตุจริงของปัญหา (Actual Cause)** และ **วิธีการแก้ไข (Resolution)**
-* ปุ่ม **"Sync TSS"** สำหรับดึงข้อมูลล่าสุดจาก ITSM ได้ทันทีเพียงคลิกเดียว
+* แสดงรายละเอียดใบงาน NT TTS, ข้อมูลวงจร, พิกัด GPS, ทีมช่างผู้รับผิดชอบ, สาเหตุจริง (Actual Cause) และวิธีแก้ไข (Resolution)
+* แสดงป้าย osTicket ลิงก์ตรงสู่ระบบ Helpdesk
+* ปุ่ม **"ซิงค์ Ticket"** สำหรับดึงข้อมูลล่าสุดของทั้ง NT TTS และ osTicket ได้ทันทีเพียงคลิกเดียว
 
 ---
 
-## 8. โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย
+## 9. โครงสร้างฐานข้อมูลและฟิลด์ที่ได้รับการขยาย
 
-ตาราง `incidents_incident` ในโมเดล Django ([`incidents/models.py`](file:///root/container/event-analyzer/backend/incidents/models.py)) ได้รับการขยายฟิลด์ผ่าน Migration `0007_...`:
+ตาราง `incidents_incident` ในโมเดล Django ([`incidents/models.py`](file:///root/container/event-analyzer/backend/incidents/models.py)) ประกอบด้วยฟิลด์สำคัญ:
 
 | ชื่อฟิลด์ใน Database | ชนิดข้อมูล (Data Type) | แหล่งที่มาของข้อมูล | คำอธิบายการใช้งาน |
 | :--- | :--- | :--- | :--- |
+| `incident_number` | `CharField(50)` | System Generator | รหัสเหตุการณ์ (เช่น `LNK-20261013-000004`) |
 | `incident_type` | `CharField(10)` | Normalizer / Engine | ประเภท Incident (`LINK` หรือ `DEVICE`) |
 | `site_name` | `CharField(255)` | IPGET API 1 & 2 | ชื่อชุมสาย / สถานีฐาน หรือศูนย์โทรคมนาคม |
-| `circuit_id` | `CharField(100)` | IPGET API 1 / Regex | รหัสวงจร NTID ของสายสัญญาณ (เช่น `TBB...`, `308...`) |
+| `circuit_id` | `CharField(100)` | IPGET API 1 / Regex | รหัสวงจร NTID ของสายสัญญาณ (เช่น `TBB0005562+TBB147010`) |
 | `remote_device` | `CharField(255)` | IPGET API 1 | ชื่อเราเตอร์หรืออุปกรณ์ฝั่งปลายทาง (`destname`) |
 | `remote_interface` | `CharField(100)` | IPGET API 1 | พอร์ตปลายทางของวงจร (`destport`) |
-| `ticket_id_tss` | `CharField(100)` | IPGET API 1 & 3 | หมายเลขใบสั่งงานแจ้งซ่อมบำรุง (TTS / ITSM Incident ID) |
-| `tts_status` | `CharField(100)` | IPGET API 3 | สถานะงานแก้ในระบบ TTS (เช่น `Work In Progress`, `Resolved`) |
+| `ticket_id_tss` | `CharField(100)` | IPGET API 1 & 3 / TTS | หมายเลขใบสั่งงาน NT TTS (เช่น `SD26096232`) |
+| `tts_status` | `CharField(100)` | IPGET API 3 / TTS | สถานะงานแก้ NT TTS (เช่น `Open`, `Work In Progress`) |
+| `ticket_id_osticket` | `CharField(100)` | osTicket Gateway | หมายเลข Trouble Ticket บน osTicket (เช่น `NT002843`) |
+| `osticket_status` | `CharField(50)` | osTicket Gateway | สถานะตั๋ว osTicket (เช่น `Open`, `PENDING_CREATION`) |
 | `repair_team` | `CharField(255)` | IPGET API 3 | ทีมช่างผู้รับผิดชอบงานแก้ (`REPAIRTEAM`) |
 | `response_department` | `CharField(255)` | IPGET API 3 | หน่วยงานต้นสังกัดผู้รับผิดชอบ (`RESPONSE_DEPARTMENT`) |
-| `actual_cause` | `TextField` | IPGET API 3 | สาเหตุจริงของปัญหาจากใบสั่งงาน (`CAUSE_DETAIL`) |
-| `resolution` | `TextField` | IPGET API 3 | วิธีการแก้ไขปัญหา / ผลการซ่อมบำรุง (`RESOLUTION`) |
-| `source_gps` | `CharField(100)` | IPGET API 3 Description | พิกัด GPS ต้นทาง (Latitude, Longitude) |
-| `dest_gps` | `CharField(100)` | IPGET API 3 Description | พิกัด GPS ปลายทาง (Latitude, Longitude) |
+| `actual_cause` | `TextField` | IPGET API 3 | สาเหตุจริงของปัญหาจากใบสั่งงาน |
+| `resolution` | `TextField` | IPGET API 3 | วิธีการแก้ไขปัญหา / ผลการซ่อมบำรุง |
 | `flap_count` | `IntegerField` | Link Engine | จำนวนรอบการกระพริบสะสมภายในหน้าต่างเวลา 30 นาที |
 | `soak_until` | `DateTimeField` | Link Engine | เวลาสิ้นสุดการรอดูอาการความเสถียร 45 นาที |
 | `net_downtime_seconds` | `BigIntegerField` | Link Engine | เวลาที่ระบบดับจริงสะสม (ไม่นับช่วงรอดูอาการ) |
 
 ---
 
-## 9. คู่มือการทดสอบ ตรวจสอบ และวินิจฉัยระบบ
+## 10. คู่มือการทดสอบ ตรวจสอบ และวินิจฉัยระบบ
 
-### 9.1 การรันชุดทดสอบความถูกต้องทั้งระบบ (Automated E2E Test Suite)
-ระบบมีชุดทดสอบอัตโนมัติ 20 รายการ ครอบคลุม Webhook, Engine, Verification, API, Cache และ Frontend Assets:
+### 10.1 คำสั่งตรวจสอบสถานะ Incident และตั๋วคู่ผ่าน API
 ```bash
-python3 /root/.gemini/antigravity-cli/brain/1bc19313-feed-448a-97cd-da4c638050af/scratch/test_all_systems.py
-```
-*ผลลัพธ์ที่ถูกต้อง: ทุกการทดสอบต้องขึ้น `[PASS]` รวม 20/20 รายการ (100% Pass)*
-
----
-
-### 9.2 คำสั่งทดสอบจำลอง Webhook และ Event Ingestion
-
-#### 1. ทดสอบส่งเหตุการณ์เราเตอร์หลักดับ (Device Down):
-```bash
-curl -s -X POST http://localhost:8089/api/v1/integrations/prtg/webhook/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sensor": "Ping",
-    "status": "Down",
-    "device": "BKK-CORE-R01",
-    "ip": "10.0.1.1",
-    "message": "Ping timeout"
-  }' | python3 -m json.tool
-```
-
-#### 2. ทดสอบส่งเหตุการณ์สายสัญญาณ/พอร์ตดับ (Link Down):
-```bash
-curl -s -X POST http://localhost:8089/api/v1/integrations/prtg/webhook/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sensor": "Traffic (HundredGigE0/1/0/0) To_CNX_Core",
-    "status": "Down",
-    "device": "BKK-CORE-R01",
-    "ip": "10.0.1.1",
-    "message": "Link down on port HundredGigE0/1/0/0"
-  }' | python3 -m json.tool
-```
-
-#### 3. ทดสอบส่งสัญญาณพอร์ตกลับมาติด (Link Up / เข้าสู่ Soak Period):
-```bash
-curl -s -X POST http://localhost:8089/api/v1/integrations/prtg/webhook/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sensor": "Traffic (HundredGigE0/1/0/0) To_CNX_Core",
-    "status": "Up",
-    "device": "BKK-CORE-R01",
-    "ip": "10.0.1.1",
-    "message": "Link restored"
-  }' | python3 -m json.tool
-```
-
----
-
-### 9.3 คำสั่งทดสอบการเชื่อมต่อ IPGET & TTS ผ่าน Django Shell
-
-ผู้ดูแลระบบสามารถทดสอบการเชื่อมต่อ API ของ IPGET ได้โดยตรงผ่าน Django Shell:
-
-```bash
-docker exec -it eventanalyzer-backend python manage.py shell -c "
-from integrations.ipget import IPGETClient
-
-client = IPGETClient()
-
-# 1. ทดสอบ Query Interface Alarms
-if_alarms = client.fetch_interface_alarms(interval_hour=24)
-print(f'Fetched {len(if_alarms)} interface alarms')
-
-# 2. ทดสอบ Query Node Ping Alarms
-node_alarms = client.fetch_node_alarms(interval_hour=24)
-print(f'Fetched {len(node_alarms)} node ping alarms')
-
-# 3. ทดสอบ Query TTS ด้วย Circuit NTID
-tts_sample = client.fetch_tts_by_ntids(['TBB001234'])
-print(f'TTS response count: {len(tts_sample)}')
+# ค้นหาเหตุการณ์ตามรหัสวงจร (เช่น TBB147010)
+curl -s "http://localhost:8089/api/v1/incidents/?search=TBB147010" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for item in data.get('results', []):
+    print(item['id'], item['incident_number'], item['device_name'], item['circuit_id'], item['ticket_id_tss'], item['ticket_id_osticket'], item['osticket_status'])
 "
 ```
 
----
-
-### 9.4 คำสั่งทดสอบ On-Demand Ticket Sync API
-สั่ง Trigger ให้ระบบอัปเดตข้อมูลตั๋ว TTS ของ Incident ใดๆ แบบ Real-time:
+### 10.2 คำสั่งทดสอบ On-Demand Ticket Sync API
+สั่ง Trigger ให้ระบบซิงค์ข้อมูลทั้ง NT TTS และ osTicket สำหรับ Incident ที่ระบุ:
 ```bash
-curl -s -X POST http://localhost:8089/api/v1/incidents/1/sync-ticket/ \
+curl -s -X POST http://localhost:8089/api/v1/incidents/254/sync-ticket/ \
   -H "Content-Type: application/json" | python3 -m json.tool
 ```
 
----
+### 10.3 คำสั่งทดสอบการเปิด osTicket และ Peer Auto-Propagation ผ่าน Django Shell
+```bash
+docker exec -it eventanalyzer-backend python manage.py shell -c "
+from integrations.osticket.client import OSTicketClient
+from incidents.models import Incident
 
-### 9.5 คำสั่ง Rebuild Frontend และ Reload Web Server
-เมื่อมีการแก้ไขไฟล์หน้าบ้าน (`frontend/src/`):
+client = OSTicketClient()
+inc = Incident.objects.get(id=253)
+
+# ทดสอบรัน Peer Propagation ไปยัง Incident คู่ขนาน
+count = client.propagate_ticket_to_peers(inc, 'NT002843', circuit_id=inc.circuit_id, cat_tts=inc.ticket_id_tss)
+print(f'Peer propagation updated: {count} incidents')
+"
+```
+
+### 10.4 คำสั่ง Rebuild Frontend และ Reload Nginx
+เมื่อมีการปรับแต่งแก้ไขโค้ดฝั่งหน้าบ้าน:
 ```bash
 cd /root/container/event-analyzer/frontend && npm run build
 docker exec eventanalyzer-frontend nginx -s reload
