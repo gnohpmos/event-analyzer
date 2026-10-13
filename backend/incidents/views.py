@@ -137,13 +137,16 @@ class IncidentSyncTicketView(APIView):
         except Incident.DoesNotExist:
             return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        force_refresh = request.data.get('force_refresh', False) if (hasattr(request, 'data') and isinstance(request.data, dict)) else False
         from incidents.tasks import sync_single_incident_ticket_task
-        res = sync_single_incident_ticket_task(incident.id)
+        res = sync_single_incident_ticket_task(incident.id, force_refresh=force_refresh)
         incident.refresh_from_db()
         return Response({
             'status': 'success',
             'sync_result': res,
             'ticket_id_tss': incident.ticket_id_tss,
+            'ticket_id_osticket': incident.ticket_id_osticket,
+            'osticket_status': incident.osticket_status,
             'circuit_id': incident.circuit_id,
             'remote_device': incident.remote_device,
             'remote_interface': incident.remote_interface,
@@ -155,6 +158,217 @@ class IncidentSyncTicketView(APIView):
             'resolution': incident.resolution,
             'source_gps': incident.source_gps,
             'dest_gps': incident.dest_gps,
+        })
+
+
+class IncidentTicketEligibilityView(APIView):
+    """
+    Evaluates the 4 strict conditions for opening a ticket for an incident:
+    1. Confirmed down info from IPGET API 1 (/device/alarm/interface/)
+    2. Circuit ID present from IPGET API 1
+    3. Continuous downtime >= 15 minutes (900 seconds)
+    4. No existing ticket already opened
+    GET /api/v1/incidents/{pk}/ticket-eligibility/
+    """
+    def get(self, request, pk):
+        try:
+            incident = Incident.objects.select_related('primary_device').get(pk=pk)
+        except Incident.DoesNotExist:
+            return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        force_refresh = request.query_params.get('force_refresh', 'false').lower() in ('true', '1')
+        from incidents.services import TicketPolicyService
+        policy = TicketPolicyService()
+        result = policy.evaluate_eligibility(incident, force_refresh=force_refresh)
+        desc = policy.build_ticket_description(incident, result.get('matched_alarm'), result.get('circuit_id'))
+        result['proposed_description'] = desc
+        return Response(result)
+
+
+class IncidentOpenTicketView(APIView):
+    """
+    Opens an incident ticket on NT TTS via tts-service sub-container after validating the 4 strict conditions.
+    POST /api/v1/incidents/{pk}/open-ticket/
+    """
+    def post(self, request, pk):
+        try:
+            incident = Incident.objects.select_related('primary_device').get(pk=pk)
+        except Incident.DoesNotExist:
+            return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        from incidents.services import TicketPolicyService
+        from integrations.tts import TTSClient
+        policy = TicketPolicyService()
+        eval_result = policy.evaluate_eligibility(incident)
+
+        force = request.data.get('force', False)
+        if not eval_result['is_eligible'] and not force:
+            return Response({
+                'status': 'error',
+                'message': 'Incident does not meet the 4 required conditions for opening a ticket',
+                'reasons': eval_result['reasons'],
+                'evaluation': eval_result
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        circuit_id = request.data.get('circuit_id') or eval_result.get('circuit_id') or incident.circuit_id
+        if not circuit_id:
+            return Response({'status': 'error', 'message': 'Circuit ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        description = request.data.get('description') or policy.build_ticket_description(
+            incident, eval_result.get('matched_alarm'), circuit_id
+        )
+        assignment_group = request.data.get('assignment_group') or "ขทค. DATACOM [ Tier 1 ]"
+        title = request.data.get('title') or "Down"
+
+        # Resolve GPS coordinates from NTSite API or existing incident attributes
+        matched = eval_result.get('matched_alarm') or {}
+        src_site_id = matched.get('site_id')
+        dest_site_id = matched.get('dest_site_id')
+        src_info = policy.ipget.fetch_site_info(src_site_id) if src_site_id else None
+        dest_info = policy.ipget.fetch_site_info(dest_site_id) if dest_site_id else None
+
+        source_lat = (src_info.get('latitude') if src_info else None) or (incident.source_gps.split(',')[0].strip() if incident.source_gps and ',' in incident.source_gps else '')
+        source_lon = (src_info.get('longitude') if src_info else None) or (incident.source_gps.split(',')[1].strip() if incident.source_gps and ',' in incident.source_gps else '')
+        dest_lat = (dest_info.get('latitude') if dest_info else None) or (incident.dest_gps.split(',')[0].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
+        dest_lon = (dest_info.get('longitude') if dest_info else None) or (incident.dest_gps.split(',')[1].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
+
+        tts_client = TTSClient()
+        res = tts_client.open_ticket(
+            circuit_id=circuit_id,
+            description=description,
+            assignment_group=assignment_group,
+            title=title,
+            source_latitude=source_lat,
+            source_longitude=source_lon,
+            dest_latitude=dest_lat,
+            dest_longitude=dest_lon
+        )
+
+        if not res.get('success'):
+            return Response({
+                'status': 'error',
+                'message': 'Failed to open ticket on NT TTS',
+                'error': res.get('error'),
+                'details': res
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Update Incident in Database (prioritize SD... interaction_id to match IPGET standard)
+        interaction_id = res.get('interaction_id')
+        incident_id = res.get('incident_id')
+
+        # Fallback verification: If interaction_id is missing or doesn't start with 'SD', query IPGET API 3
+        if not interaction_id or not str(interaction_id).startswith('SD'):
+            try:
+                from integrations.ipget import IPGETClient
+                ipget = IPGETClient()
+                tts_list = ipget.fetch_tts_by_ntids([circuit_id], prefer_cache=False, force_refresh=True)
+                if tts_list and tts_list[0].get('INCIDENT_ID') and str(tts_list[0]['INCIDENT_ID']).startswith('SD'):
+                    interaction_id = tts_list[0]['INCIDENT_ID']
+                    logger.info(f"Resolved interaction_id {interaction_id} from IPGET API 3 for circuit {circuit_id}")
+            except Exception as e:
+                logger.warning(f"Failed to resolve interaction_id from IPGET: {e}")
+
+        ticket_id = interaction_id or incident_id or incident.ticket_id_tss
+        incident.ticket_id_tss = ticket_id
+        incident.circuit_id = circuit_id
+        incident.tts_status = 'Open'
+        incident.repair_team = assignment_group
+        up_fields = ['ticket_id_tss', 'circuit_id', 'tts_status', 'repair_team', 'updated_at']
+        if source_lat and source_lon and not incident.source_gps:
+            incident.source_gps = f"{source_lat}, {source_lon}"
+            up_fields.append('source_gps')
+        if dest_lat and dest_lon and not incident.dest_gps:
+            incident.dest_gps = f"{dest_lat}, {dest_lon}"
+            up_fields.append('dest_gps')
+        incident.save(update_fields=up_fields)
+
+        # Add Timeline Entry
+        from common.constants import TimelineEventType
+        incident.add_timeline_entry(
+            event_type=TimelineEventType.TICKET_LINKED,
+            source='NT_TTS_GATEWAY',
+            description=f"Opened Trouble Ticket {ticket_id} on NT TTS (Incident ID: {incident_id or '-'})",
+            data={
+                'incident_id': incident_id,
+                'interaction_id': interaction_id,
+                'ticket_id_tss': ticket_id,
+                'circuit_id': circuit_id,
+                'fault_time': res.get('fault_time'),
+                'assignment_group': assignment_group
+            }
+        )
+
+        # Trigger osTicket creation automatically right after NT TTS ticket is obtained
+        osticket_res = None
+        try:
+            from integrations.osticket import OSTicketClient
+            osticket_client = OSTicketClient()
+            osticket_res = osticket_client.open_ticket(
+                incident=incident,
+                circuit_id=circuit_id,
+                cat_tts=ticket_id,
+                action_summary=description
+            )
+            logger.info(f"Auto osTicket creation result for {incident.incident_number}: {osticket_res}")
+        except Exception as e:
+            logger.error(f"Failed auto osTicket creation for {incident.incident_number}: {e}")
+
+        # Refresh incident in memory to get updated osticket fields
+        incident.refresh_from_db()
+
+        return Response({
+            'status': 'success',
+            'incident_id': incident_id,
+            'interaction_id': interaction_id,
+            'ticket_id_tss': ticket_id,
+            'ticket_id_osticket': incident.ticket_id_osticket,
+            'osticket_status': incident.osticket_status,
+            'osticket_result': osticket_res,
+            'circuit_id': circuit_id,
+            'tts_status': 'Open',
+            'fault_time': res.get('fault_time'),
+        })
+
+
+class IncidentOpenOSTicketView(APIView):
+    """
+    Manually creates or links an osTicket for an incident.
+    POST /api/v1/incidents/{pk}/open-osticket/
+    """
+    def post(self, request, pk):
+        try:
+            incident = Incident.objects.select_related('primary_device').get(pk=pk)
+        except Incident.DoesNotExist:
+            return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        force = request.data.get('force', False)
+        circuit_id = request.data.get('circuit_id') or incident.circuit_id
+        cat_tts = request.data.get('cat_tts') or incident.ticket_id_tss
+        action_summary = request.data.get('action_summary')
+
+        from integrations.osticket import OSTicketClient
+        client = OSTicketClient()
+        res = client.open_ticket(
+            incident=incident,
+            circuit_id=circuit_id,
+            cat_tts=cat_tts,
+            action_summary=action_summary,
+            force=force
+        )
+
+        if not res.get('success'):
+            return Response({
+                'status': 'error',
+                'message': res.get('error') or 'Failed to create osTicket',
+                'details': res
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        incident.refresh_from_db()
+        return Response({
+            'status': 'success',
+            'ticket_id_osticket': incident.ticket_id_osticket,
+            'osticket_status': incident.osticket_status,
+            'details': res
         })
 
 

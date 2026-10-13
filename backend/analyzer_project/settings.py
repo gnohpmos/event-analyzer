@@ -145,6 +145,7 @@ CELERY_BEAT_SCHEDULE = {
     'sync-pending-tss-tickets-every-2-minutes': {
         'task': 'incidents.tasks.sync_pending_tss_tickets_task',
         'schedule': 120.0,
+        'args': (72,),
     },
 }
 

@@ -11,7 +11,8 @@ import {
   Save,
   AlertCircle,
   RefreshCw,
-  Ticket
+  Ticket,
+  ExternalLink
 } from 'lucide-react';
 import { IncidentDetail, ClassificationType, ConfidenceType } from '../types';
 import { api } from '../services/api';
@@ -106,10 +107,12 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({ incide
     setSyncFeedback(null);
     try {
       const res = await api.syncIncidentTicket(incident.id);
-      if (res.ticket_id_tss || res.circuit_id || res.site_name) {
+      if (res.ticket_id_tss || res.ticket_id_osticket || res.circuit_id || res.site_name) {
         setIncident(prev => prev ? {
           ...prev,
           ticket_id_tss: res.ticket_id_tss ?? prev.ticket_id_tss,
+          ticket_id_osticket: res.ticket_id_osticket ?? prev.ticket_id_osticket,
+          osticket_status: res.osticket_status ?? prev.osticket_status,
           circuit_id: res.circuit_id ?? prev.circuit_id,
           remote_device: res.remote_device ?? prev.remote_device,
           remote_interface: res.remote_interface ?? prev.remote_interface,
@@ -122,11 +125,12 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({ incide
           source_gps: res.source_gps ?? prev.source_gps,
           dest_gps: res.dest_gps ?? prev.dest_gps,
         } : null);
+        const osticketMsg = res.ticket_id_osticket ? ` | osTicket: ${res.ticket_id_osticket}` : '';
         setSyncFeedback({
           type: 'success',
           message: res.ticket_id_tss 
-            ? `เชื่อมโยง Trouble Ticket สำเร็จ: ${res.ticket_id_tss}${res.tts_status ? ` (${res.tts_status})` : ''}`
-            : `อัปเดตข้อมูลสำเร็จ (${res.site_name || res.circuit_id || 'Matched'})`
+            ? `เชื่อมโยง Trouble Ticket สำเร็จ: ${res.ticket_id_tss}${res.tts_status ? ` (${res.tts_status})` : ''}${osticketMsg}`
+            : (res.ticket_id_osticket ? `เชื่อมโยง osTicket สำเร็จ: ${res.ticket_id_osticket}` : `อัปเดตข้อมูลสำเร็จ (${res.site_name || res.circuit_id || 'Matched'})`)
         });
       } else {
         setSyncFeedback({
@@ -172,6 +176,19 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({ incide
                   <Ticket className="w-3.5 h-3.5 text-amber-400" />
                   {incident.ticket_id_tss}
                 </span>
+              )}
+              {incident.ticket_id_osticket && (
+                <a
+                  href={`https://msticket.catbb.net/osticket/scp/tickets.php?number=${incident.ticket_id_osticket}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono hover:bg-blue-500/25 transition-colors"
+                  title="เปิดดูตั๋วบน AIT osTicket"
+                >
+                  <Ticket className="w-3.5 h-3.5 text-blue-400" />
+                  <span>osTicket: {incident.ticket_id_osticket}</span>
+                  <ExternalLink className="w-3 h-3 text-blue-400" />
+                </a>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">

@@ -171,6 +171,7 @@ class TimelineEventType:
     SOAK_TIMER_RESET = 'SOAK_TIMER_RESET'
     SOAK_TIMER_COMPLETED = 'SOAK_TIMER_COMPLETED'
     TICKET_LINKED = 'TICKET_LINKED'
+    OSTICKET_LINKED = 'OSTICKET_LINKED'
 
     CHOICES = [
         (DOWN, 'Down'),
@@ -191,6 +192,7 @@ class TimelineEventType:
         (SOAK_TIMER_RESET, 'Soak Timer Reset'),
         (SOAK_TIMER_COMPLETED, 'Soak Timer Completed'),
         (TICKET_LINKED, 'Ticket Linked'),
+        (OSTICKET_LINKED, 'osTicket Linked'),
     ]
 
 

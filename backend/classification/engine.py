@@ -73,13 +73,21 @@ class ClassificationEngine:
                 f"time_diff={time_diff:.1f}s tolerance={tolerance}s"
             )
 
-            if time_diff <= tolerance:
-                # Reboot time aligns with Down event -> Check reload reason evidence
-                reload_cat = (evidence.get('reload_category') or '').upper()
-                if reload_cat == 'POWER_OUTAGE':
-                    logger.info(f"CLASSIFY: {incident.incident_number} -> POWER_OUTAGE_REBOOT (confirmed by evidence)")
+            # Check reload category from deep evidence
+            reload_cat = (evidence.get('reload_category') or '').upper()
+
+            # Case A: Explicit Power Outage
+            # Power outages can last from minutes to hours until electricity/generator is restored.
+            # As long as the router recently booted (uptime < threshold) and whyReload confirms power-on,
+            # and boot time is after down_time, it is a confirmed POWER_OUTAGE_REBOOT.
+            if reload_cat == 'POWER_OUTAGE':
+                if estimated_boot_time >= down_time - timezone.timedelta(seconds=tolerance):
+                    logger.info(f"CLASSIFY: {incident.incident_number} -> POWER_OUTAGE_REBOOT (confirmed by whyReload: {evidence.get('reload_reason')})")
                     return Classification.POWER_OUTAGE_REBOOT, Confidence.HIGH
-                elif reload_cat == 'MANUAL_RELOAD':
+
+            # Case B: Reboot time closely aligns with Down event (quick reload within tolerance)
+            if time_diff <= tolerance:
+                if reload_cat == 'MANUAL_RELOAD':
                     logger.info(f"CLASSIFY: {incident.incident_number} -> MANUAL_RELOAD (confirmed by evidence)")
                     return Classification.MANUAL_RELOAD, Confidence.HIGH
                 elif reload_cat == 'SOFTWARE_CRASH':
@@ -88,9 +96,18 @@ class ClassificationEngine:
 
                 # Default confirmed reboot without specific deep root-cause
                 return Classification.DEVICE_REBOOT_RELATED, Confidence.HIGH
-            else:
-                # Router rebooted, but time does not match Down event -> LOW confidence
-                return Classification.DEVICE_REBOOT_SUSPECTED, Confidence.LOW
+
+            # Case C: Explicit reload evidence during an extended outage window
+            if estimated_boot_time >= down_time - timezone.timedelta(seconds=tolerance):
+                if reload_cat == 'MANUAL_RELOAD':
+                    logger.info(f"CLASSIFY: {incident.incident_number} -> MANUAL_RELOAD (confirmed by evidence during outage)")
+                    return Classification.MANUAL_RELOAD, Confidence.HIGH
+                elif reload_cat == 'SOFTWARE_CRASH':
+                    logger.info(f"CLASSIFY: {incident.incident_number} -> SOFTWARE_CRASH (confirmed by evidence during outage)")
+                    return Classification.SOFTWARE_CRASH, Confidence.HIGH
+
+            # Case D: Router rebooted, but boot time does not match Down event and no conclusive evidence
+            return Classification.DEVICE_REBOOT_SUSPECTED, Confidence.LOW
 
         else:
             # Long uptime: Router was running during the outage -> connectivity loss

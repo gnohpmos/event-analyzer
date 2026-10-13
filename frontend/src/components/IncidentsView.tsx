@@ -208,9 +208,29 @@ export const IncidentsView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {(Array.isArray(incidents) ? incidents : []).map((incident) => (
-                  <tr key={incident.id} className="hover:bg-muted/40 transition-colors">
-                    <td className="px-5 py-4 font-mono font-medium text-primary">
+                {(Array.isArray(incidents) ? incidents : []).map((incident) => {
+                  const isDown = incident.status === 'DOWN';
+                  const isFlapping = incident.status === 'FLAPPING';
+                  return (
+                    <tr
+                      key={incident.id}
+                      className={`transition-colors ${
+                        isDown
+                          ? 'bg-rose-500/[0.08] hover:bg-rose-500/[0.14]'
+                          : isFlapping
+                          ? 'bg-amber-500/[0.05] hover:bg-amber-500/[0.10]'
+                          : 'hover:bg-muted/40'
+                      }`}
+                    >
+                      <td
+                        className={`px-5 py-4 font-mono font-medium text-primary ${
+                          isDown
+                            ? 'border-l-4 border-l-rose-500'
+                            : isFlapping
+                            ? 'border-l-4 border-l-amber-500/70'
+                            : 'border-l-4 border-l-transparent'
+                        }`}
+                      >
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setSelectedIncidentId(incident.id)}
@@ -228,25 +248,41 @@ export const IncidentsView: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      {incident.ticket_id_tss ? (
+                      {(incident.ticket_id_tss || incident.ticket_id_osticket) ? (
                         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 font-sans shadow-sm"
-                            title={`TSS Trouble Ticket: ${incident.ticket_id_tss}`}
-                          >
-                            <svg className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
-                            </svg>
-                            <span className="font-mono tracking-tight">{incident.ticket_id_tss}</span>
-                          </span>
-                          {incident.tts_status && (
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase ${
-                              incident.tts_status.toLowerCase().includes('resolved') || incident.tts_status.toLowerCase().includes('close')
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                            }`}>
-                              {incident.tts_status === 'Work In Progress' ? 'WIP' : incident.tts_status}
-                            </span>
+                          {incident.ticket_id_tss && (
+                            <>
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 font-sans shadow-sm"
+                                title={`NT TTS Trouble Ticket: ${incident.ticket_id_tss}`}
+                              >
+                                <svg className="w-3 h-3 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
+                                </svg>
+                                <span className="font-mono tracking-tight">{incident.ticket_id_tss}</span>
+                              </span>
+                              {incident.tts_status && (
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase ${
+                                  incident.tts_status.toLowerCase().includes('resolved') || incident.tts_status.toLowerCase().includes('close')
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                }`}>
+                                  {incident.tts_status === 'Work In Progress' ? 'WIP' : incident.tts_status}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {incident.ticket_id_osticket && (
+                            <a
+                              href={`https://msticket.catbb.net/osticket/scp/tickets.php?number=${incident.ticket_id_osticket}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors font-mono"
+                              title={`osTicket: ${incident.ticket_id_osticket}`}
+                            >
+                              <span>{incident.ticket_id_osticket}</span>
+                            </a>
                           )}
                         </div>
                       ) : (
@@ -369,7 +405,8 @@ export const IncidentsView: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

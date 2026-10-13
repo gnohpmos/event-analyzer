@@ -63,13 +63,30 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
           </thead>
           <tbody className="divide-y divide-border">
             {incidents.length > 0 ? (
-              incidents.map((inc: SerializedReportIncident) => (
-                <tr
-                  key={inc.id}
-                  onClick={() => onSelectIncident && onSelectIncident(inc.id)}
-                  className="hover:bg-muted/40 cursor-pointer transition-colors"
-                >
-                  <td className="py-3 px-4 font-mono font-bold text-primary">
+              incidents.map((inc: SerializedReportIncident) => {
+                const isDown = inc.status === 'DOWN';
+                const isFlapping = inc.status === 'FLAPPING';
+                return (
+                  <tr
+                    key={inc.id}
+                    onClick={() => onSelectIncident && onSelectIncident(inc.id)}
+                    className={`cursor-pointer transition-colors ${
+                      isDown
+                        ? 'bg-rose-500/[0.08] hover:bg-rose-500/[0.14]'
+                        : isFlapping
+                        ? 'bg-amber-500/[0.05] hover:bg-amber-500/[0.10]'
+                        : 'hover:bg-muted/40'
+                    }`}
+                  >
+                    <td
+                      className={`py-3 px-4 font-mono font-bold text-primary ${
+                        isDown
+                          ? 'border-l-4 border-l-rose-500'
+                          : isFlapping
+                          ? 'border-l-4 border-l-amber-500/70'
+                          : 'border-l-4 border-l-transparent'
+                      }`}
+                    >
                     <div className="flex items-center gap-1.5">
                       <span>{inc.incident_number}</span>
                       <ExternalLink className="w-3 h-3 text-muted-foreground opacity-60" />
@@ -174,7 +191,8 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
                     {formatDuration(inc.net_downtime_seconds ?? inc.downtime_seconds)}
                   </td>
                 </tr>
-              ))
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={10} className="py-8 text-center text-muted-foreground text-sm">

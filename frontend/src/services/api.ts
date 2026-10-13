@@ -82,6 +82,8 @@ export const api = {
   async syncIncidentTicket(id: number): Promise<{
     status: string;
     ticket_id_tss?: string | null;
+    ticket_id_osticket?: string | null;
+    osticket_status?: string | null;
     circuit_id?: string | null;
     remote_device?: string | null;
     remote_interface?: string | null;
@@ -102,6 +104,70 @@ export const api = {
     });
     if (!res.ok) throw new Error(`Failed to sync ticket for incident ${id}`);
     return res.json();
+  },
+
+  async checkTicketEligibility(id: number): Promise<{
+    is_eligible: boolean;
+    circuit_id: string;
+    downtime_seconds: number;
+    remaining_seconds: number;
+    conditions: {
+      ipget_confirmed: { passed: boolean; label: string; details?: string | null };
+      has_circuit_id: { passed: boolean; label: string; details?: string | null };
+      sustained_15m: { passed: boolean; label: string; current_minutes: number; required_minutes: number; remaining_seconds: number };
+      no_existing_ticket: { passed: boolean; label: string; existing_ticket?: string | null };
+    };
+    reasons: string[];
+    proposed_description?: string;
+  }> {
+    const res = await fetch(`/api/v1/incidents/${id}/ticket-eligibility/`);
+    if (!res.ok) throw new Error(`Failed to check ticket eligibility for incident ${id}`);
+    return res.json();
+  },
+
+  async openIncidentTicket(id: number, payload?: { circuit_id?: string; description?: string; assignment_group?: string; force?: boolean }): Promise<{
+    status: string;
+    incident_id?: string;
+    interaction_id?: string;
+    circuit_id?: string;
+    tts_status?: string;
+    fault_time?: string;
+    ticket_id_tss?: string;
+    ticket_id_osticket?: string;
+    osticket_status?: string;
+    osticket_result?: any;
+    message?: string;
+    reasons?: string[];
+  }> {
+    const res = await fetch(`/api/v1/incidents/${id}/open-ticket/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || (data.reasons ? data.reasons.join(', ') : `Failed to open ticket for incident ${id}`));
+    }
+    return data;
+  },
+
+  async openIncidentOSTicket(id: number, payload?: { circuit_id?: string; cat_tts?: string; action_summary?: string; force?: boolean }): Promise<{
+    status: string;
+    ticket_id_osticket?: string;
+    osticket_status?: string;
+    details?: any;
+    message?: string;
+  }> {
+    const res = await fetch(`/api/v1/incidents/${id}/open-osticket/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || `Failed to create osTicket for incident ${id}`);
+    }
+    return data;
   },
 
   async getDevices(): Promise<Device[]> {

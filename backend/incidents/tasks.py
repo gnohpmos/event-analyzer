@@ -133,10 +133,11 @@ def check_link_soak_completion(self, incident_id: int):
 
 
 @shared_task
-def sync_pending_tss_tickets_task(interval_hour: int = 24):
+def sync_pending_tss_tickets_task(interval_hour: int = 72):
     """
-    Periodic task to check IPGET for any LINK or DEVICE incidents
-    that do not yet have a TSS trouble ticket ID (ticket_id_tss).
+    Cache Master Periodic task (every 2 minutes):
+    Refreshes IPGET alarm cache in Redis (force_refresh=True) and
+    enriches any pending LINK or DEVICE incidents that require ticket sync.
     Delegates orchestration to IncidentEnrichmentService.
     """
     from incidents.services import IncidentEnrichmentService
@@ -145,15 +146,15 @@ def sync_pending_tss_tickets_task(interval_hour: int = 24):
 
 
 @shared_task
-def sync_single_incident_ticket_task(incident_id: int):
+def sync_single_incident_ticket_task(incident_id: int, force_refresh: bool = False):
     """
     On-demand sync for a specific incident (triggered when opening IncidentDetailModal or clicking Sync Ticket).
     Supports both LINK and DEVICE incidents.
-    Always queries latest TTS status, repair team, and actual cause.
+    Defaults to Cache-First (force_refresh=False).
     Delegates orchestration to IncidentEnrichmentService.
     """
     from incidents.services import IncidentEnrichmentService
     service = IncidentEnrichmentService()
-    return service.enrich_single_incident(incident_id)
+    return service.enrich_single_incident(incident_id, force_refresh=force_refresh)
 
 

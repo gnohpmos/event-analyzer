@@ -131,6 +131,8 @@ export interface IncidentListItem {
   interface_name?: string;
   link_description?: string;
   ticket_id_tss?: string | null;
+  ticket_id_osticket?: string | null;
+  osticket_status?: string | null;
   circuit_id?: string | null;
   remote_device?: string | null;
   site_name?: string | null;

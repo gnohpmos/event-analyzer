@@ -38,6 +38,14 @@ class Incident(models.Model):
         max_length=50, blank=True, default='', db_index=True,
         help_text='Trouble Ticket ID from TSS/TTS (e.g. SD26094869)'
     )
+    ticket_id_osticket = models.CharField(
+        max_length=50, blank=True, default='', db_index=True,
+        help_text='Trouble Ticket ID from osTicket (e.g. NT002829)'
+    )
+    osticket_status = models.CharField(
+        max_length=50, blank=True, default='',
+        help_text='osTicket Status (e.g. Open, PENDING_CREATION, FAILED_NEEDS_VERIFY)'
+    )
     circuit_id = models.CharField(
         max_length=100, blank=True, default='',
         help_text='Circuit ID / NTID (e.g. TBB145020)'
