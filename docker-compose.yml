@@ -53,6 +53,7 @@ services:
     command: sh -c "sed -i 's/\r$//' /app/entrypoint.sh && exec /app/entrypoint.sh"
     volumes:
       - ./backend:/app
+      - /var/lib/mysql/mysql.sock:/var/lib/mysql/mysql.sock
     env_file:
       - .env
     environment:
@@ -81,6 +82,7 @@ services:
     command: sh -c "celery -A analyzer_project worker -B -l info --concurrency=4"
     volumes:
       - ./backend:/app
+      - /var/lib/mysql/mysql.sock:/var/lib/mysql/mysql.sock
     env_file:
       - .env
     environment:

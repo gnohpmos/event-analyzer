@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     iputils-ping \
+    traceroute \
     net-tools \
     curl \
     procps \

@@ -352,6 +352,84 @@ export const api = {
     const res = await fetch('/api/v1/settings/export-devices/');
     if (!res.ok) throw new Error('Failed to export devices');
     return res.json();
+  },
+
+  // Wan2Loopback Topology, Live Traceroute & Interface Traffic Loss APIs
+  async searchWan2Lo0Nodes(q: string = '', limit: number = 40): Promise<{ count: number; nodes: import('../types').Wan2Lo0Node[] }> {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    params.set('limit', String(limit));
+    const res = await fetch(`/api/v1/integrations/wan2lo0/nodes/?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to search router nodes');
+    return res.json();
+  },
+
+  async analyzeWan2Lo0Topology(payload: {
+    mode: 'general' | 'asymmetric';
+    ipaddr?: string;
+    ipaddr_fwd?: string;
+    ipaddr_ret?: string;
+    auto_peer?: boolean;
+  }): Promise<import('../types').Wan2Lo0AnalysisResult> {
+    const res = await fetch('/api/v1/integrations/wan2lo0/analyze/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to analyze network path');
+    return data;
+  },
+
+  async runLiveTraceroute(payload: {
+    trace_type: 'router_ssh' | 'server_os';
+    source_router_ip?: string;
+    target_ip: string;
+    source_interface?: string;
+    auto_reverse?: boolean;
+    auto_peer?: boolean;
+    max_hops?: number;
+  }): Promise<import('../types').LiveTracerouteResponse> {
+    const res = await fetch('/api/v1/integrations/wan2lo0/live-traceroute/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to execute live traceroute');
+    return data;
+  },
+
+  async inspectTopologyInterfaces(payload: {
+    targets: import('../types').Wan2Lo0TopologyInterface[];
+    measure_delta?: boolean;
+    delta_interval_sec?: number;
+  }): Promise<import('../types').InterfaceInspectionResponse> {
+    const res = await fetch('/api/v1/integrations/wan2lo0/inspect-interfaces/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to inspect router interfaces');
+    return data;
+  },
+
+  async runSegmentedMPLSTrace(payload: {
+    source_router_ip: string;
+    target_ip: string;
+    max_domains?: number;
+    auto_peer?: boolean;
+    auto_reverse?: boolean;
+  }): Promise<import('../types').SegmentedMPLSTraceResponse> {
+    const res = await fetch('/api/v1/integrations/wan2lo0/segmented-mpls-trace/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to execute Segmented MPLS OAM trace');
+    return data;
   }
 };
 

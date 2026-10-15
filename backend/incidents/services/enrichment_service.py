@@ -59,13 +59,13 @@ class IncidentEnrichmentService:
         except Exception as e:
             logger.warning(f"CACHE_MASTER: Failed to refresh node ping alarms: {e}")
 
-        # 2. Process pending incidents
+        # 2. Process pending and active incidents
         cutoff = timezone.now() - timedelta(hours=interval_hour)
         pending_incidents = (
             Incident.objects
             .filter(
                 Q(ticket_id_tss='') | Q(ticket_id_tss__isnull=True) | Q(ticket_id_tss__startswith='IM')
-                | (Q(status__in=IncidentStatus.ACTIVE_STATUSES) & Q(tts_status__in=['Complete', 'Closed', 'Resolved']))
+                | Q(status__in=IncidentStatus.ACTIVE_STATUSES)
             )
             .filter(Q(status__in=IncidentStatus.ACTIVE_STATUSES) | Q(created_at__gte=cutoff))
             .select_related('primary_device')
@@ -95,15 +95,50 @@ class IncidentEnrichmentService:
                     inc.save(update_fields=list(set(changed)))
                     updated_count += 1
 
-            # Phase 2 for LINK incidents: Query TTS by Circuit NTID
+            # Phase 2 for LINK incidents: Query TTS by Circuit NTID (refresh active tickets too)
             still_pending = [
                 inc for inc in link_incidents
                 if not inc.ticket_id_tss
                 or inc.ticket_id_tss.startswith('IM')
-                or (inc.status in IncidentStatus.ACTIVE_STATUSES and inc.tts_status in ['Complete', 'Closed', 'Resolved'])
+                or inc.status in IncidentStatus.ACTIVE_STATUSES
             ]
             if still_pending:
-                updated_count += self._sync_tts_by_circuits(still_pending)
+                updated_count += self._sync_tts_by_circuits(still_pending, force_refresh=True)
+
+            # Phase 2.5 for LINK incidents: Sync NT TTS ticket from Peer incidents on same circuit
+            active_links_without_tts = Incident.objects.filter(
+                incident_type=IncidentType.LINK,
+                status__in=IncidentStatus.ACTIVE_STATUSES,
+                ticket_id_tss=''
+            ).exclude(circuit_id='')
+            for inc in active_links_without_tts:
+                cid = self._resolve_circuit_id(inc)
+                if not cid:
+                    continue
+                peer_tts = (
+                    Incident.objects
+                    .filter(circuit_id=cid, status__in=IncidentStatus.ACTIVE_STATUSES)
+                    .exclude(id=inc.id)
+                    .exclude(ticket_id_tss='')
+                    .exclude(tts_status__in=['Complete', 'Closed', 'Resolved', 'Rejected', 'Cancelled', 'Cancel'])
+                    .first()
+                )
+                if peer_tts and peer_tts.ticket_id_tss:
+                    inc.ticket_id_tss = peer_tts.ticket_id_tss
+                    inc.tts_status = peer_tts.tts_status or 'Open'
+                    up_fields = ['ticket_id_tss', 'tts_status', 'updated_at']
+                    if peer_tts.repair_team and not inc.repair_team:
+                        inc.repair_team = peer_tts.repair_team
+                        up_fields.append('repair_team')
+                    inc.save(update_fields=up_fields)
+                    inc.add_timeline_entry(
+                        event_type=TimelineEventType.TICKET_LINKED,
+                        source='NT_TTS_PEER_SYNC',
+                        description=f"Auto-linked Trouble Ticket {peer_tts.ticket_id_tss} from peer circuit incident {peer_tts.incident_number}",
+                        data={'ticket_id_tss': peer_tts.ticket_id_tss, 'circuit_id': cid, 'peer_incident': peer_tts.incident_number}
+                    )
+                    updated_count += 1
+                    logger.info(f"TTS_PEER_AUTO_SYNC: Linked NT TTS {peer_tts.ticket_id_tss} to {inc.incident_number}")
 
             # Phase 3 for LINK incidents: Sync osTicket from Peer incidents
             active_links_without_osticket = Incident.objects.filter(
@@ -229,34 +264,48 @@ class IncidentEnrichmentService:
             ip_index, name_index = self.client.build_alarm_index(alarms)
             changed_fields.extend(self._enrich_link_with_index(inc, ip_index, name_index))
 
-        # 2. Query TTS by Circuit ID (Cache-First)
+        # 2. Query TTS by Circuit ID (Cache-First, supporting composite IDs)
         cid = self._resolve_circuit_id(inc)
         if cid:
-            tts_list = self.client.fetch_tts_by_ntids([cid], prefer_cache=(not force_refresh), force_refresh=force_refresh)
+            candidates = [p.strip() for p in re.split(r'[+,/;\s]+', cid) if p.strip()]
+            if cid not in candidates:
+                candidates.append(cid)
+            tts_list = self.client.fetch_tts_by_ntids(candidates, prefer_cache=(not force_refresh), force_refresh=force_refresh)
             if tts_list and tts_list[0].get('INCIDENT_ID'):
                 candidate = tts_list[0]
-                cand_status = candidate.get('IM_STATUS', '')
-                cand_fault = candidate.get('FAULT_DATE')
-
-                # Check if ticket is stale (completed before incident down_time by > 6 hours)
-                is_stale = False
-                if cand_status in ['Complete', 'Closed', 'Resolved'] and cand_fault and inc.down_time:
-                    try:
-                        cand_dt = datetime.fromisoformat(cand_fault.replace('Z', '+00:00'))
-                        if cand_dt.tzinfo is None:
-                            cand_dt = cand_dt.replace(tzinfo=ZoneInfo('Asia/Bangkok'))
-                        if (inc.down_time - cand_dt).total_seconds() > 21600:
-                            is_stale = True
-                            logger.info(
-                                f"TTS_SKIP_STALE: Skipping stale completed ticket {candidate.get('INCIDENT_ID')} "
-                                f"(fault date {cand_fault}) for incident {inc.incident_number} (down {inc.down_time})"
-                            )
-                    except Exception as e:
-                        logger.warning(f"Error parsing candidate fault date {cand_fault}: {e}")
-
-                if not is_stale:
+                if not self._is_stale_ticket(inc, candidate):
                     tts_info = self.client.extract_tts_info(candidate)
                     changed_fields.extend(self._apply_tts_info(inc, tts_info, source='TTS_SYNC'))
+                elif inc.ticket_id_tss == candidate.get('INCIDENT_ID'):
+                    inc.ticket_id_tss = ''
+                    inc.tts_status = ''
+                    inc.repair_team = ''
+                    changed_fields.extend(['ticket_id_tss', 'tts_status', 'repair_team'])
+                    logger.info(f"TTS_UNLINK_STALE: Cleared stale ticket {candidate.get('INCIDENT_ID')} from {inc.incident_number}")
+
+            # 2.5 Fallback: Check active peer incident for NT TTS ticket
+            if not inc.ticket_id_tss:
+                peer_tts = (
+                    Incident.objects
+                    .filter(circuit_id__in=candidates, status__in=IncidentStatus.ACTIVE_STATUSES)
+                    .exclude(id=inc.id)
+                    .exclude(ticket_id_tss='')
+                    .exclude(tts_status__in=['Complete', 'Closed', 'Resolved', 'Rejected', 'Cancelled', 'Cancel'])
+                    .first()
+                )
+                if peer_tts and peer_tts.ticket_id_tss:
+                    inc.ticket_id_tss = peer_tts.ticket_id_tss
+                    inc.tts_status = peer_tts.tts_status or 'Open'
+                    changed_fields.extend(['ticket_id_tss', 'tts_status'])
+                    if peer_tts.repair_team and not inc.repair_team:
+                        inc.repair_team = peer_tts.repair_team
+                        changed_fields.append('repair_team')
+                    inc.add_timeline_entry(
+                        event_type=TimelineEventType.TICKET_LINKED,
+                        source='NT_TTS_PEER_SYNC',
+                        description=f"Auto-linked Trouble Ticket {peer_tts.ticket_id_tss} from peer circuit incident {peer_tts.incident_number}",
+                        data={'ticket_id_tss': peer_tts.ticket_id_tss, 'circuit_id': cid, 'peer_incident': peer_tts.incident_number}
+                    )
 
         # 3. Query / Sync osTicket from Peer Incident or osTicket Search
         cid = self._resolve_circuit_id(inc)
@@ -311,19 +360,48 @@ class IncidentEnrichmentService:
 
         return changed_fields
 
-    def _sync_tts_by_circuits(self, incidents: List[Incident]) -> int:
-        """Batch queries TTS by circuit IDs for pending link incidents."""
+    @staticmethod
+    def _is_stale_ticket(inc: Incident, candidate: dict) -> bool:
+        """Checks if a completed TTS ticket occurred > 6 hours before the incident down_time."""
+        cand_status = candidate.get('IM_STATUS', '')
+        cand_fault = candidate.get('FAULT_DATE')
+        if cand_status in ['Complete', 'Closed', 'Resolved', 'Rejected', 'Cancelled', 'Cancel'] and cand_fault and inc.down_time:
+            try:
+                cand_dt = datetime.fromisoformat(cand_fault.replace('Z', '+00:00'))
+                if cand_dt.tzinfo is None:
+                    cand_dt = cand_dt.replace(tzinfo=ZoneInfo('Asia/Bangkok'))
+                if (inc.down_time - cand_dt).total_seconds() > 21600:
+                    logger.info(
+                        f"TTS_SKIP_STALE: Skipping stale completed ticket {candidate.get('INCIDENT_ID')} "
+                        f"(fault date {cand_fault}) for incident {inc.incident_number} (down {inc.down_time})"
+                    )
+                    return True
+            except Exception as e:
+                logger.warning(f"Error parsing candidate fault date {cand_fault}: {e}")
+        return False
+
+    def _sync_tts_by_circuits(self, incidents: List[Incident], force_refresh: bool = False) -> int:
+        """Batch queries TTS by circuit IDs for pending and active link incidents."""
         from collections import defaultdict
         ntid_map: Dict[str, List[Incident]] = defaultdict(list)
         for inc in incidents:
             cid = self._resolve_circuit_id(inc)
             if cid:
-                ntid_map[cid].append(inc)
+                parts = [p.strip() for p in re.split(r'[+,/;\s]+', cid) if p.strip()]
+                if cid not in parts:
+                    parts.append(cid)
+                for p in parts:
+                    if inc not in ntid_map[p]:
+                        ntid_map[p].append(inc)
 
         if not ntid_map:
             return 0
 
-        tts_records = self.client.fetch_tts_by_ntids(list(ntid_map.keys()))
+        tts_records = self.client.fetch_tts_by_ntids(
+            list(ntid_map.keys()),
+            prefer_cache=(not force_refresh),
+            force_refresh=force_refresh,
+        )
         updated_count = 0
         for record in tts_records:
             cat_id = record.get('CATID')
@@ -332,12 +410,21 @@ class IncidentEnrichmentService:
                 inc_list = ntid_map[cat_id]
                 tts_info = self.client.extract_tts_info(record)
                 for inc in inc_list:
+                    if self._is_stale_ticket(inc, record):
+                        if inc.ticket_id_tss == t_id:
+                            inc.ticket_id_tss = ''
+                            inc.tts_status = ''
+                            inc.repair_team = ''
+                            inc.save(update_fields=['ticket_id_tss', 'tts_status', 'repair_team', 'updated_at'])
+                            updated_count += 1
+                            logger.info(f"TTS_UNLINK_STALE: Cleared stale ticket {t_id} from active incident {inc.incident_number}")
+                        continue
                     changed = self._apply_tts_info(inc, tts_info, source='TTS_SYNC')
                     if changed:
                         changed.append('updated_at')
                         inc.save(update_fields=list(set(changed)))
                         updated_count += 1
-                        logger.info(f"TTS_SYNC_SUCCESS: Link Incident {inc.incident_number} linked/upgraded to ticket {t_id}")
+                        logger.info(f"TTS_SYNC_SUCCESS: Link Incident {inc.incident_number} linked/updated to ticket {t_id}")
 
         return updated_count
 

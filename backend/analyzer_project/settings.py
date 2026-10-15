@@ -147,6 +147,10 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 120.0,
         'args': (72,),
     },
+    'auto-open-pending-ostickets-every-minute': {
+        'task': 'incidents.tasks.auto_open_pending_ostickets_task',
+        'schedule': 60.0,
+    },
 }
 
 # Business Logic Configuration

@@ -97,7 +97,13 @@ export const IncidentRecordsTable: React.FC<IncidentRecordsTableProps> = ({
                           🎫 {inc.ticket_id_tss}
                         </span>
                         {inc.tts_status && (
-                          <span className="px-1 py-0.2 rounded text-[9px] font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase ${
+                            inc.tts_status.toLowerCase().includes('resolved') ||
+                            inc.tts_status.toLowerCase().includes('close') ||
+                            inc.tts_status.toLowerCase().includes('complete')
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          }`}>
                             {inc.tts_status === 'Work In Progress' ? 'WIP' : inc.tts_status}
                           </span>
                         )}

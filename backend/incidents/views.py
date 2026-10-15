@@ -1,9 +1,13 @@
+import logging
 from datetime import timedelta
 from django.db.models import Count, Avg, F, Q
 from django.utils import timezone
 from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+
+logger = logging.getLogger(__name__)
+
 
 from common.constants import IncidentStatus, Classification, IncidentType, TimelineEventType
 from incidents.models import Incident, EventTimeline, IncidentEvent
@@ -188,20 +192,47 @@ class IncidentTicketEligibilityView(APIView):
 class IncidentOpenTicketView(APIView):
     """
     Opens an incident ticket on NT TTS via tts-service sub-container after validating the 4 strict conditions.
+    Includes distributed locking, peer & live IPGET deduplication, and automatic peer propagation.
     POST /api/v1/incidents/{pk}/open-ticket/
     """
     def post(self, request, pk):
+        from django.db import transaction
+        from incidents.services import TicketPolicyService
+        from integrations.tts import TTSClient
+
         try:
             incident = Incident.objects.select_related('primary_device').get(pk=pk)
         except Incident.DoesNotExist:
             return Response({'status': 'error', 'message': 'Incident not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        from incidents.services import TicketPolicyService
-        from integrations.tts import TTSClient
         policy = TicketPolicyService()
         eval_result = policy.evaluate_eligibility(incident)
 
         force = request.data.get('force', False)
+        circuit_id = (request.data.get('circuit_id') or eval_result.get('circuit_id') or incident.circuit_id or '').strip()
+
+        # If evaluate_eligibility already auto-linked a ticket from a peer incident, return success immediately
+        if incident.ticket_id_tss and not force:
+            policy.propagate_tts_ticket_to_peers(
+                origin_incident=incident,
+                ticket_id=incident.ticket_id_tss,
+                circuit_id=circuit_id,
+                tts_status=incident.tts_status or 'Open',
+                repair_team=incident.repair_team or '',
+                is_reused=True,
+            )
+            return Response({
+                'status': 'success',
+                'reused': True,
+                'interaction_id': incident.ticket_id_tss,
+                'ticket_id_tss': incident.ticket_id_tss,
+                'ticket_id_osticket': incident.ticket_id_osticket,
+                'osticket_status': incident.osticket_status,
+                'circuit_id': circuit_id,
+                'tts_status': incident.tts_status or 'Open',
+                'message': f'เชื่อมโยงตั๋ว NT TTS ที่มีอยู่แล้วสำเร็จ: {incident.ticket_id_tss}'
+            })
+
         if not eval_result['is_eligible'] and not force:
             return Response({
                 'status': 'error',
@@ -210,7 +241,6 @@ class IncidentOpenTicketView(APIView):
                 'evaluation': eval_result
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        circuit_id = request.data.get('circuit_id') or eval_result.get('circuit_id') or incident.circuit_id
         if not circuit_id:
             return Response({'status': 'error', 'message': 'Circuit ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -220,114 +250,229 @@ class IncidentOpenTicketView(APIView):
         assignment_group = request.data.get('assignment_group') or "ขทค. DATACOM [ Tier 1 ]"
         title = request.data.get('title') or "Down"
 
-        # Resolve GPS coordinates from NTSite API or existing incident attributes
-        matched = eval_result.get('matched_alarm') or {}
-        src_site_id = matched.get('site_id')
-        dest_site_id = matched.get('dest_site_id')
-        src_info = policy.ipget.fetch_site_info(src_site_id) if src_site_id else None
-        dest_info = policy.ipget.fetch_site_info(dest_site_id) if dest_site_id else None
+        lock_key = f"lock:tts_open:circuit:{circuit_id or incident.id}"
+        with policy.redis_lock_circuit(lock_key, expire=240) as acquired:
+            if not acquired and not force:
+                return Response({
+                    'status': 'error',
+                    'message': f'กำลังดำเนินการเปิดตั๋ว NT TTS สำหรับวงจร {circuit_id} จากอีกคำขอหนึ่ง กรุณารอสักครู่',
+                    'code': 'CONCURRENT_LOCK'
+                }, status=status.HTTP_409_CONFLICT)
 
-        source_lat = (src_info.get('latitude') if src_info else None) or (incident.source_gps.split(',')[0].strip() if incident.source_gps and ',' in incident.source_gps else '')
-        source_lon = (src_info.get('longitude') if src_info else None) or (incident.source_gps.split(',')[1].strip() if incident.source_gps and ',' in incident.source_gps else '')
-        dest_lat = (dest_info.get('latitude') if dest_info else None) or (incident.dest_gps.split(',')[0].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
-        dest_lon = (dest_info.get('longitude') if dest_info else None) or (incident.dest_gps.split(',')[1].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
+            # Layer 1 & 2 inside lock: Check DB state and active peer incidents with select_for_update
+            with transaction.atomic():
+                locked_inc = Incident.objects.select_for_update().get(pk=incident.id)
+                if locked_inc.ticket_id_tss and not force:
+                    return Response({
+                        'status': 'success',
+                        'reused': True,
+                        'interaction_id': locked_inc.ticket_id_tss,
+                        'ticket_id_tss': locked_inc.ticket_id_tss,
+                        'ticket_id_osticket': locked_inc.ticket_id_osticket,
+                        'osticket_status': locked_inc.osticket_status,
+                        'circuit_id': circuit_id,
+                        'tts_status': locked_inc.tts_status or 'Open',
+                    })
 
-        tts_client = TTSClient()
-        res = tts_client.open_ticket(
-            circuit_id=circuit_id,
-            description=description,
-            assignment_group=assignment_group,
-            title=title,
-            source_latitude=source_lat,
-            source_longitude=source_lon,
-            dest_latitude=dest_lat,
-            dest_longitude=dest_lon
-        )
+                if not force:
+                    peer_inc = policy.find_active_circuit_tts_ticket(circuit_id, exclude_incident_id=locked_inc.id)
+                    if peer_inc and peer_inc.ticket_id_tss:
+                        locked_inc.ticket_id_tss = peer_inc.ticket_id_tss
+                        locked_inc.circuit_id = circuit_id
+                        locked_inc.tts_status = peer_inc.tts_status or 'Open'
+                        if peer_inc.repair_team and not locked_inc.repair_team:
+                            locked_inc.repair_team = peer_inc.repair_team
+                        locked_inc.save(update_fields=['ticket_id_tss', 'circuit_id', 'tts_status', 'repair_team', 'updated_at'])
+                        locked_inc.add_timeline_entry(
+                            event_type=TimelineEventType.TICKET_LINKED,
+                            source='NT_TTS_PEER_SYNC',
+                            description=f"Reused active Trouble Ticket {peer_inc.ticket_id_tss} from peer incident {peer_inc.incident_number}",
+                            data={'ticket_id_tss': peer_inc.ticket_id_tss, 'circuit_id': circuit_id, 'reused': True}
+                        )
+                        return Response({
+                            'status': 'success',
+                            'reused': True,
+                            'interaction_id': locked_inc.ticket_id_tss,
+                            'ticket_id_tss': locked_inc.ticket_id_tss,
+                            'ticket_id_osticket': locked_inc.ticket_id_osticket,
+                            'osticket_status': locked_inc.osticket_status,
+                            'circuit_id': circuit_id,
+                            'tts_status': locked_inc.tts_status,
+                        })
 
-        if not res.get('success'):
-            return Response({
-                'status': 'error',
-                'message': 'Failed to open ticket on NT TTS',
-                'error': res.get('error'),
-                'details': res
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Layer 3: Live IPGET API 3 Check before launching Playwright to prevent duplicate ticket creation
+            if not force:
+                try:
+                    candidates = policy.extract_circuit_candidates(circuit_id)
+                    live_tts = policy.ipget.fetch_tts_by_ntids(candidates, prefer_cache=False, force_refresh=True)
+                    for rec in (live_tts or []):
+                        rec_id = (rec.get('INCIDENT_ID') or '').strip()
+                        rec_status = (rec.get('IM_STATUS') or '').strip()
+                        if rec_id and rec_status not in ('Complete', 'Closed', 'Resolved', 'Rejected', 'Cancelled', 'Cancel'):
+                            tts_info = policy.ipget.extract_tts_info(rec)
+                            incident.ticket_id_tss = rec_id
+                            incident.circuit_id = circuit_id
+                            incident.tts_status = rec_status or 'Open'
+                            if tts_info.get('repair_team'):
+                                incident.repair_team = tts_info['repair_team']
+                            incident.save(update_fields=['ticket_id_tss', 'circuit_id', 'tts_status', 'repair_team', 'updated_at'])
+                            incident.add_timeline_entry(
+                                event_type=TimelineEventType.TICKET_LINKED,
+                                source='NT_TTS_GATEWAY',
+                                description=f"Discovered and linked existing active Trouble Ticket {rec_id} on NT TTS ({rec_status})",
+                                data={'ticket_id_tss': rec_id, 'circuit_id': circuit_id, 'tts_status': rec_status, 'reused': True}
+                            )
+                            policy.propagate_tts_ticket_to_peers(
+                                origin_incident=incident,
+                                ticket_id=rec_id,
+                                circuit_id=circuit_id,
+                                tts_status=incident.tts_status,
+                                repair_team=incident.repair_team or '',
+                                is_reused=True,
+                            )
+                            logger.info(f"Reused existing live NT TTS ticket {rec_id} for {incident.incident_number}")
+                            return Response({
+                                'status': 'success',
+                                'reused': True,
+                                'interaction_id': rec_id,
+                                'ticket_id_tss': rec_id,
+                                'ticket_id_osticket': incident.ticket_id_osticket,
+                                'osticket_status': incident.osticket_status,
+                                'circuit_id': circuit_id,
+                                'tts_status': incident.tts_status,
+                            })
+                except Exception as e:
+                    logger.warning(f"Live IPGET TTS pre-check warning for {circuit_id}: {e}")
 
-        # Update Incident in Database (prioritize SD... interaction_id to match IPGET standard)
-        interaction_id = res.get('interaction_id')
-        incident_id = res.get('incident_id')
+            # Resolve GPS coordinates from NTSite API or existing incident attributes
+            matched = eval_result.get('matched_alarm') or {}
+            src_site_id = matched.get('site_id')
+            dest_site_id = matched.get('dest_site_id')
+            src_info = policy.ipget.fetch_site_info(src_site_id) if src_site_id else None
+            dest_info = policy.ipget.fetch_site_info(dest_site_id) if dest_site_id else None
 
-        # Fallback verification: If interaction_id is missing or doesn't start with 'SD', query IPGET API 3
-        if not interaction_id or not str(interaction_id).startswith('SD'):
+            source_lat = (src_info.get('latitude') if src_info else None) or (incident.source_gps.split(',')[0].strip() if incident.source_gps and ',' in incident.source_gps else '')
+            source_lon = (src_info.get('longitude') if src_info else None) or (incident.source_gps.split(',')[1].strip() if incident.source_gps and ',' in incident.source_gps else '')
+            dest_lat = (dest_info.get('latitude') if dest_info else None) or (incident.dest_gps.split(',')[0].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
+            dest_lon = (dest_info.get('longitude') if dest_info else None) or (incident.dest_gps.split(',')[1].strip() if incident.dest_gps and ',' in incident.dest_gps else '')
+
+            tts_client = TTSClient()
+            res = tts_client.open_ticket(
+                circuit_id=circuit_id,
+                description=description,
+                assignment_group=assignment_group,
+                title=title,
+                source_latitude=source_lat,
+                source_longitude=source_lon,
+                dest_latitude=dest_lat,
+                dest_longitude=dest_lon
+            )
+
+            if not res.get('success'):
+                return Response({
+                    'status': 'error',
+                    'message': 'Failed to open ticket on NT TTS',
+                    'error': res.get('error'),
+                    'details': res
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Update Incident in Database (prioritize SD... interaction_id to match IPGET standard)
+            interaction_id = res.get('interaction_id')
+            incident_id = res.get('incident_id')
+
+            # Fallback verification: If interaction_id is missing or doesn't start with 'SD', query IPGET API 3
+            if not interaction_id or not str(interaction_id).startswith('SD'):
+                try:
+                    candidates = policy.extract_circuit_candidates(circuit_id)
+                    tts_list = policy.ipget.fetch_tts_by_ntids(candidates, prefer_cache=False, force_refresh=True)
+                    if tts_list and tts_list[0].get('INCIDENT_ID') and str(tts_list[0]['INCIDENT_ID']).startswith('SD'):
+                        interaction_id = tts_list[0]['INCIDENT_ID']
+                        logger.info(f"Resolved interaction_id {interaction_id} from IPGET API 3 for circuit {circuit_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to resolve interaction_id from IPGET: {e}")
+
+            ticket_id = interaction_id or incident_id or incident.ticket_id_tss
+            incident.ticket_id_tss = ticket_id
+            incident.circuit_id = circuit_id
+            incident.tts_status = res.get('status') or 'Open'
+            incident.repair_team = assignment_group
+            up_fields = ['ticket_id_tss', 'circuit_id', 'tts_status', 'repair_team', 'updated_at']
+            if source_lat and source_lon and not incident.source_gps:
+                incident.source_gps = f"{source_lat}, {source_lon}"
+                up_fields.append('source_gps')
+            if dest_lat and dest_lon and not incident.dest_gps:
+                incident.dest_gps = f"{dest_lat}, {dest_lon}"
+                up_fields.append('dest_gps')
+            incident.save(update_fields=up_fields)
+
+            # Add Timeline Entry
+            incident.add_timeline_entry(
+                event_type=TimelineEventType.TICKET_LINKED,
+                source='NT_TTS_GATEWAY',
+                description=f"Opened Trouble Ticket {ticket_id} on NT TTS (Incident ID: {incident_id or '-'})",
+                data={
+                    'incident_id': incident_id,
+                    'interaction_id': interaction_id,
+                    'ticket_id_tss': ticket_id,
+                    'circuit_id': circuit_id,
+                    'fault_time': res.get('fault_time'),
+                    'assignment_group': assignment_group
+                }
+            )
+
+            # Auto-propagate NT TTS ticket to active peer incidents on the same circuit
+            policy.propagate_tts_ticket_to_peers(
+                origin_incident=incident,
+                ticket_id=ticket_id,
+                circuit_id=circuit_id,
+                tts_status=incident.tts_status,
+                repair_team=assignment_group,
+                incident_id_im=incident_id,
+                is_reused=False,
+            )
+
+            # Invalidate stale Redis TTS cache for this circuit so next sync fetches fresh data
             try:
-                from integrations.ipget import IPGETClient
-                ipget = IPGETClient()
-                tts_list = ipget.fetch_tts_by_ntids([circuit_id], prefer_cache=False, force_refresh=True)
-                if tts_list and tts_list[0].get('INCIDENT_ID') and str(tts_list[0]['INCIDENT_ID']).startswith('SD'):
-                    interaction_id = tts_list[0]['INCIDENT_ID']
-                    logger.info(f"Resolved interaction_id {interaction_id} from IPGET API 3 for circuit {circuit_id}")
+                r = policy.ipget._get_redis()
+                if r:
+                    for c in policy.extract_circuit_candidates(circuit_id):
+                        r.delete(f"ipget:tts:{c}")
+            except Exception:
+                pass
+
+            # Trigger osTicket creation automatically right after NT TTS ticket is obtained if enabled
+            osticket_res = None
+            try:
+                from integrations.osticket import OSTicketClient
+                osticket_client = OSTicketClient()
+                if osticket_client.is_auto_create_enabled():
+                    osticket_res = osticket_client.open_ticket(
+                        incident=incident,
+                        circuit_id=circuit_id,
+                        cat_tts=ticket_id,
+                        action_summary=description
+                    )
+                    logger.info(f"Auto osTicket creation result for {incident.incident_number}: {osticket_res}")
+                else:
+                    logger.info(f"Auto osTicket creation skipped for {incident.incident_number} (disabled in system settings)")
             except Exception as e:
-                logger.warning(f"Failed to resolve interaction_id from IPGET: {e}")
+                logger.error(f"Failed auto osTicket creation for {incident.incident_number}: {e}")
 
-        ticket_id = interaction_id or incident_id or incident.ticket_id_tss
-        incident.ticket_id_tss = ticket_id
-        incident.circuit_id = circuit_id
-        incident.tts_status = 'Open'
-        incident.repair_team = assignment_group
-        up_fields = ['ticket_id_tss', 'circuit_id', 'tts_status', 'repair_team', 'updated_at']
-        if source_lat and source_lon and not incident.source_gps:
-            incident.source_gps = f"{source_lat}, {source_lon}"
-            up_fields.append('source_gps')
-        if dest_lat and dest_lon and not incident.dest_gps:
-            incident.dest_gps = f"{dest_lat}, {dest_lon}"
-            up_fields.append('dest_gps')
-        incident.save(update_fields=up_fields)
+            # Refresh incident in memory to get updated osticket fields
+            incident.refresh_from_db()
 
-        # Add Timeline Entry
-        from common.constants import TimelineEventType
-        incident.add_timeline_entry(
-            event_type=TimelineEventType.TICKET_LINKED,
-            source='NT_TTS_GATEWAY',
-            description=f"Opened Trouble Ticket {ticket_id} on NT TTS (Incident ID: {incident_id or '-'})",
-            data={
+            return Response({
+                'status': 'success',
                 'incident_id': incident_id,
                 'interaction_id': interaction_id,
                 'ticket_id_tss': ticket_id,
+                'ticket_id_osticket': incident.ticket_id_osticket,
+                'osticket_status': incident.osticket_status,
+                'osticket_result': osticket_res,
                 'circuit_id': circuit_id,
+                'tts_status': incident.tts_status,
                 'fault_time': res.get('fault_time'),
-                'assignment_group': assignment_group
-            }
-        )
-
-        # Trigger osTicket creation automatically right after NT TTS ticket is obtained
-        osticket_res = None
-        try:
-            from integrations.osticket import OSTicketClient
-            osticket_client = OSTicketClient()
-            osticket_res = osticket_client.open_ticket(
-                incident=incident,
-                circuit_id=circuit_id,
-                cat_tts=ticket_id,
-                action_summary=description
-            )
-            logger.info(f"Auto osTicket creation result for {incident.incident_number}: {osticket_res}")
-        except Exception as e:
-            logger.error(f"Failed auto osTicket creation for {incident.incident_number}: {e}")
-
-        # Refresh incident in memory to get updated osticket fields
-        incident.refresh_from_db()
-
-        return Response({
-            'status': 'success',
-            'incident_id': incident_id,
-            'interaction_id': interaction_id,
-            'ticket_id_tss': ticket_id,
-            'ticket_id_osticket': incident.ticket_id_osticket,
-            'osticket_status': incident.osticket_status,
-            'osticket_result': osticket_res,
-            'circuit_id': circuit_id,
-            'tts_status': 'Open',
-            'fault_time': res.get('fault_time'),
-        })
+            })
 
 
 class IncidentOpenOSTicketView(APIView):

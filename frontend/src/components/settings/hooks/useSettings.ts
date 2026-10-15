@@ -92,6 +92,15 @@ export const useSettings = () => {
   const [prtgEnabled, setPrtgEnabled] = useState(true);
   const [prtgToken, setPrtgToken] = useState('');
 
+  // osTicket
+  const [osticketAutoCreate, setOsticketAutoCreate] = useState(false);
+  const [osticketDelaySeconds, setOsticketDelaySeconds] = useState('0');
+  const [osticketTopicId, setOsticketTopicId] = useState('27');
+  const [osticketSlaId, setOsticketSlaId] = useState('10');
+  const [osticketSenderName, setOsticketSenderName] = useState('พงศธร พันสนิท');
+  const [osticketSenderEmail, setOsticketSenderEmail] = useState('p.pansanit@gmail.com');
+  const [savingOSTicket, setSavingOSTicket] = useState(false);
+
   // SNMP Test form
   const [testHost, setTestHost] = useState('10.0.10.9');
   const [testCommunity, setTestCommunity] = useState('');
@@ -142,6 +151,12 @@ export const useSettings = () => {
       if (map.has('SSH_PASSWORD')) setSshPassword(map.get('SSH_PASSWORD') || '');
       if (map.has('SSH_PORT')) setSshPort(map.get('SSH_PORT') || '22');
       if (map.has('SSH_TIMEOUT')) setSshTimeout(map.get('SSH_TIMEOUT') || '5');
+      if (map.has('OSTICKET_AUTO_CREATE')) setOsticketAutoCreate(map.get('OSTICKET_AUTO_CREATE')?.toLowerCase() === 'true');
+      if (map.has('OSTICKET_AUTO_CREATE_DELAY_SECONDS')) setOsticketDelaySeconds(map.get('OSTICKET_AUTO_CREATE_DELAY_SECONDS') || '0');
+      if (map.has('OSTICKET_TOPIC_ID')) setOsticketTopicId(map.get('OSTICKET_TOPIC_ID') || '27');
+      if (map.has('OSTICKET_SLA_ID')) setOsticketSlaId(map.get('OSTICKET_SLA_ID') || '10');
+      if (map.has('OSTICKET_SENDER_NAME')) setOsticketSenderName(map.get('OSTICKET_SENDER_NAME') || 'พงศธร พันสนิท');
+      if (map.has('OSTICKET_SENDER_EMAIL')) setOsticketSenderEmail(map.get('OSTICKET_SENDER_EMAIL') || 'p.pansanit@gmail.com');
     } catch (err: any) {
       setSaveError(err.message || 'Failed to load system settings');
     } finally {
@@ -238,6 +253,31 @@ export const useSettings = () => {
       setSaveError(err.message || 'Failed to save thresholds');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveOSTicketSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingOSTicket(true);
+    setSaveSuccess(null);
+    setSaveError(null);
+
+    try {
+      await api.batchUpdateSettings({
+        OSTICKET_AUTO_CREATE: osticketAutoCreate ? 'True' : 'False',
+        OSTICKET_AUTO_CREATE_DELAY_SECONDS: osticketDelaySeconds,
+        OSTICKET_TOPIC_ID: osticketTopicId,
+        OSTICKET_SLA_ID: osticketSlaId,
+        OSTICKET_SENDER_NAME: osticketSenderName,
+        OSTICKET_SENDER_EMAIL: osticketSenderEmail,
+      });
+      setSaveSuccess('osTicket integration & automation settings saved successfully!');
+      setTimeout(() => setSaveSuccess(null), 4000);
+      await loadSettings();
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to save osTicket settings');
+    } finally {
+      setSavingOSTicket(false);
     }
   };
 
@@ -517,6 +557,21 @@ export const useSettings = () => {
     setPrtgEnabled,
     prtgToken,
     setPrtgToken,
+    // osTicket
+    osticketAutoCreate,
+    setOsticketAutoCreate,
+    osticketDelaySeconds,
+    setOsticketDelaySeconds,
+    osticketTopicId,
+    setOsticketTopicId,
+    osticketSlaId,
+    setOsticketSlaId,
+    osticketSenderName,
+    setOsticketSenderName,
+    osticketSenderEmail,
+    setOsticketSenderEmail,
+    savingOSTicket,
+    handleSaveOSTicketSettings,
     // Dev actions
     devLoadingAction,
     devFeedback,

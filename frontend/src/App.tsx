@@ -7,11 +7,12 @@ import { DevicesView } from './components/DevicesView';
 import { EventsView } from './components/EventsView';
 import { SettingsView } from './components/SettingsView';
 import { ReportView } from './components/ReportView';
+import { TracerouteView } from './components/TracerouteView';
 import { IncidentDetailModal } from './components/IncidentDetailModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 
-type TabType = 'dashboard' | 'incidents' | 'devices' | 'events' | 'report' | 'settings';
+type TabType = 'dashboard' | 'incidents' | 'devices' | 'events' | 'traceroute' | 'report' | 'settings';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -101,6 +102,17 @@ const AppContent: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setActiveTab('traceroute')}
+                className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === 'traceroute'
+                    ? 'bg-primary text-primary-foreground shadow-sm font-semibold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                }`}
+              >
+                Traceroute / Path
+              </button>
+
+              <button
                 onClick={() => setActiveTab('report')}
                 className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
                   activeTab === 'report'
@@ -144,7 +156,7 @@ const AppContent: React.FC = () => {
 
         {/* Mobile Navigation bar */}
         <div className="md:hidden border-t border-border px-4 py-2 flex items-center justify-between bg-card/95">
-          <div className="flex space-x-1">
+          <div className="flex space-x-1 overflow-x-auto">
             <button
               onClick={() => setActiveTab('dashboard')}
               className={`text-xs font-medium py-1 px-2 rounded ${activeTab === 'dashboard' ? 'text-primary font-bold bg-primary/10' : 'text-muted-foreground'}`}
@@ -168,6 +180,12 @@ const AppContent: React.FC = () => {
               className={`text-xs font-medium py-1 px-2 rounded ${activeTab === 'events' ? 'text-primary font-bold bg-primary/10' : 'text-muted-foreground'}`}
             >
               Events
+            </button>
+            <button
+              onClick={() => setActiveTab('traceroute')}
+              className={`text-xs font-medium py-1 px-2 rounded whitespace-nowrap ${activeTab === 'traceroute' ? 'text-primary font-bold bg-primary/10' : 'text-muted-foreground'}`}
+            >
+              Traceroute
             </button>
             <button
               onClick={() => setActiveTab('report')}
@@ -198,6 +216,9 @@ const AppContent: React.FC = () => {
         {activeTab === 'incidents' && <IncidentsView />}
         {activeTab === 'devices' && <DevicesView />}
         {activeTab === 'events' && <EventsView />}
+        {activeTab === 'traceroute' && (
+          <TracerouteView onSelectIncident={(id) => setSelectedIncidentId(id)} />
+        )}
         {activeTab === 'report' && (
           <ReportView onSelectIncident={(id) => setSelectedIncidentId(id)} />
         )}

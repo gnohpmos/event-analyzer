@@ -9,6 +9,64 @@ const TTS_PASSWORD = process.env.TTS_PASSWORD || 'Ait@1761@2';
  */
 class TTSEngine {
   /**
+   * Splits a potentially composite Circuit ID (e.g. "TBB0005562+TBB147010")
+   * into ordered, deduplicated candidate Circuit IDs.
+   */
+  static extractCircuitCandidates(circuitId) {
+    if (!circuitId) return [];
+    const raw = String(circuitId).trim();
+    if (!raw) return [];
+    const parts = raw.split(/[+,;/|]+/).map(p => p.trim()).filter(Boolean);
+    const candidates = [];
+    for (const part of parts) {
+      if (!candidates.includes(part)) {
+        candidates.push(part);
+      }
+    }
+    if (candidates.length === 0) {
+      candidates.push(raw);
+    }
+    return candidates;
+  }
+
+  /**
+   * Performs login to NT TTS and automatically recovers from "Maximum active logins"
+   * or stale session conflicts by releasing via goodbye.jsp and retrying once.
+   */
+  static async loginWithRetry(page) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      console.log(`[TTSEngine] Step 1: Logging in (attempt ${attempt}/2)...`);
+      await page.goto(TTS_URL, { waitUntil: 'networkidle', timeout: 30000 });
+      const userField = await page.$('#LoginUsername');
+      if (userField) {
+        await page.fill('#LoginUsername', TTS_USERNAME);
+        await page.fill('#LoginPassword', TTS_PASSWORD);
+        await page.click('button[type="submit"]');
+        await page.waitForTimeout(5000);
+      }
+
+      const bodyText = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
+      const loginStillVisible = await page.locator('#LoginUsername').isVisible().catch(() => false);
+      const hasSessionConflict =
+        bodyText.includes('Maximum active logins') ||
+        bodyText.includes('exceeded the maximum') ||
+        bodyText.includes('already logged in');
+
+      if (!hasSessionConflict && !loginStillVisible) {
+        return;
+      }
+
+      if (attempt === 1) {
+        console.warn('[TTSEngine] Session conflict or login block detected. Releasing stale session via goodbye.jsp and retrying...');
+        await page.goto('https://nttts.nc.ntplc.co.th/sm/goodbye.jsp?lang=en', { timeout: 10000 }).catch(() => {});
+        await page.waitForTimeout(2000);
+      } else {
+        throw new Error('ไม่สามารถเข้าสู่ระบบ NT TTS ได้หลังจากพยายามเคลียร์ Session ค้าง (Session Conflict / Login Failed)');
+      }
+    }
+  }
+
+  /**
    * Opens a new incident ticket in NT TTS.
    */
   static async openTicket({
@@ -31,7 +89,10 @@ class TTSEngine {
       throw new Error('description is required to open a ticket in NT TTS');
     }
 
-    console.log(`[TTSEngine] Starting ticket creation for Circuit: ${circuitId}`);
+    const circuitCandidates = TTSEngine.extractCircuitCandidates(circuitId);
+    let matchedCircuitId = circuitCandidates[0] || circuitId;
+
+    console.log(`[TTSEngine] Starting ticket creation for Circuit: ${circuitId} (candidates: ${circuitCandidates.join(', ')})`);
     const browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--ignore-certificate-errors']
@@ -46,7 +107,7 @@ class TTSEngine {
       success: false,
       incident_id: null,
       interaction_id: null,
-      circuit_id: circuitId,
+      circuit_id: matchedCircuitId,
       status: 'Open',
       assignment_group: assignmentGroup,
       fault_time: null,
@@ -54,13 +115,8 @@ class TTSEngine {
     };
 
     try {
-      // 1. Login
-      console.log('[TTSEngine] Step 1: Logging in...');
-      await page.goto(TTS_URL, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.fill('#LoginUsername', TTS_USERNAME);
-      await page.fill('#LoginPassword', TTS_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForTimeout(5000);
+      // 1. Login with automatic session conflict recovery
+      await TTSEngine.loginWithRetry(page);
 
       // 2. Open New Ticket Navigation
       console.log('[TTSEngine] Step 2: Navigating to Open New Ticket...');
@@ -73,8 +129,7 @@ class TTSEngine {
       let activeFrame = getDetailFrame();
       if (!activeFrame) activeFrame = page.frames().find(f => f !== page.mainFrame());
 
-      // 3. Search Circuit ID
-      console.log(`[TTSEngine] Step 3: Searching Circuit ID: ${circuitId}...`);
+      // 3. Search Circuit ID (supports composite Circuit ID candidates)
       const searchForCircuit = async (frame, cid) => {
         await frame.evaluate((val) => {
           const input = document.getElementById('X18') || document.querySelector('input[name="var/oss.search.value"]');
@@ -99,19 +154,31 @@ class TTSEngine {
         }
       };
 
-      await searchForCircuit(activeFrame, circuitId);
-      await page.waitForTimeout(5000);
+      let resultLink = null;
+      for (const candidate of circuitCandidates) {
+        console.log(`[TTSEngine] Step 3: Searching Circuit ID candidate: ${candidate}...`);
+        activeFrame = getDetailFrame() || activeFrame;
+        await searchForCircuit(activeFrame, candidate);
+        await page.waitForTimeout(5000);
 
-      // 4. Click Open New Ticket in Result Table
-      console.log('[TTSEngine] Step 4: Selecting circuit from search result table...');
-      activeFrame = getDetailFrame() || activeFrame;
-      let resultLink = await activeFrame.$('a:has-text("Open New Ticket")');
+        activeFrame = getDetailFrame() || activeFrame;
+        resultLink = await activeFrame.$('a:has-text("Open New Ticket")');
+        if (resultLink) {
+          matchedCircuitId = candidate;
+          result.circuit_id = candidate;
+          console.log(`[TTSEngine] Step 4: Found circuit in TTS cache using candidate: ${candidate}`);
+          break;
+        }
+      }
 
-      // If circuit record is not found in NT TTS cache, attempt to pull it from CSS (OSS)
+      // 4. If circuit record is not found in NT TTS cache for any candidate, attempt to pull from CSS (OSS)
       if (!resultLink) {
-        const pullBtn = await activeFrame.$('#X24Btn, button:has-text("ดึงข้อมูล Circuit ID")');
-        if (pullBtn) {
-          console.log(`[TTSEngine] Circuit ${circuitId} not found in TTS cache. Attempting to pull from CSS via #X24Btn...`);
+        for (const candidate of circuitCandidates) {
+          activeFrame = getDetailFrame() || activeFrame;
+          const pullBtn = await activeFrame.$('#X24Btn, button:has-text("ดึงข้อมูล Circuit ID")');
+          if (!pullBtn) break;
+
+          console.log(`[TTSEngine] Circuit ${candidate} not found in TTS cache. Attempting to pull from CSS via #X24Btn...`);
           await pullBtn.click();
           await page.waitForTimeout(6000);
 
@@ -139,10 +206,10 @@ class TTSEngine {
               return true;
             }
             return false;
-          }, { val: circuitId });
+          }, { val: candidate });
 
           if (filled) {
-            console.log(`[TTSEngine] Submitting CSS pull request for ${circuitId}...`);
+            console.log(`[TTSEngine] Submitting CSS pull request for ${candidate}...`);
             const finishBtn = await activeFrame.$('#X9Btn, button:has-text("Finish")');
             if (finishBtn) {
               await finishBtn.click();
@@ -154,18 +221,24 @@ class TTSEngine {
             await page.waitForTimeout(8000);
 
             // Re-navigate to Open New Ticket
-            console.log(`[TTSEngine] Re-navigating to Open New Ticket after CSS pull...`);
+            console.log(`[TTSEngine] Re-navigating to Open New Ticket after CSS pull for ${candidate}...`);
             const reOpenTicketLink = page.locator("a:has-text('Open New Ticket'), [ext\\:tree-node-id*='Open New Ticket'] a").first();
             await reOpenTicketLink.waitFor({ timeout: 12000 });
             await reOpenTicketLink.click();
             await page.waitForTimeout(6000);
 
             activeFrame = getDetailFrame() || page.frames().find(f => f !== page.mainFrame());
-            await searchForCircuit(activeFrame, circuitId);
+            await searchForCircuit(activeFrame, candidate);
             await page.waitForTimeout(5000);
 
             activeFrame = getDetailFrame() || activeFrame;
             resultLink = await activeFrame.$('a:has-text("Open New Ticket")');
+            if (resultLink) {
+              matchedCircuitId = candidate;
+              result.circuit_id = candidate;
+              console.log(`[TTSEngine] Found circuit after CSS pull using candidate: ${candidate}`);
+              break;
+            }
           }
         }
       }
@@ -299,6 +372,7 @@ class TTSEngine {
           descVal: descEl ? descEl.value : null
         };
       }, {
+        assignmentGroup,
         description,
         title,
         contactName,
@@ -330,13 +404,13 @@ class TTSEngine {
       }
 
       // 7. Verify and Fetch Created Ticket Record
-      console.log('[TTSEngine] Step 7: Searching created ticket record to confirm IDs...');
+      console.log(`[TTSEngine] Step 7: Searching created ticket record to confirm IDs for ${matchedCircuitId}...`);
       const searchTicketLink = page.locator("a:has-text('Search Ticket'), [ext\\:tree-node-id*='Search Ticket'] a").first();
       await searchTicketLink.click();
       await page.waitForTimeout(5000);
 
       formFrame = getDetailFrame() || formFrame;
-      await formFrame.locator('#X15').fill(circuitId);
+      await formFrame.locator('#X15').fill(matchedCircuitId);
       const doSearchBtn = await formFrame.$('button:has-text("Search"), input[value="Search"], #btnSearch');
       if (doSearchBtn) await doSearchBtn.click();
       await page.waitForTimeout(5000);
@@ -346,40 +420,76 @@ class TTSEngine {
         return Array.from(document.querySelectorAll('tr, .x-grid3-row')).map(r => r.innerText.trim()).filter(t => t.length > 5);
       });
 
-      // 1. Try parsing from table list rows matching circuitId
+      const ACTIVE_ROW_STATUSES = [
+        'Open',
+        'Investigation',
+        'Work In Progress',
+        'Dispatched',
+        'Assigned 1st',
+        'Assigned 2nd',
+        'Assigned',
+        'Pending'
+      ];
+
+      // 1. Collect all matching active rows for matchedCircuitId (or any candidate) and pick the highest (newest) SD/IM IDs
+      const matchedImIds = [];
+      const matchedSdIds = [];
+      let newestRowTime = null;
+      let highestSdSeen = '';
+
       for (const row of rows) {
-        if (row.includes(circuitId) && (row.includes('Open') || row.includes('Investigation') || row.includes('Work In Progress') || row.includes('Dispatched'))) {
-          const imMatch = row.match(/IM2\d{7}/) || row.match(/IM\d{8}/);
-          const sdMatch = row.match(/SD2\d{7}/) || row.match(/SD\d{8}/);
+        const matchesCircuit = circuitCandidates.some(cid => row.includes(cid));
+        const matchesStatus = ACTIVE_ROW_STATUSES.some(st => row.includes(st));
+        if (matchesCircuit && matchesStatus) {
+          const imMatches = row.match(/IM2\d{7}/g) || row.match(/IM\d{8}/g) || [];
+          const sdMatches = row.match(/SD2\d{7}/g) || row.match(/SD\d{8}/g) || [];
           const timeMatch = row.match(/\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}/);
 
-          if (imMatch) result.incident_id = imMatch[0];
-          if (sdMatch) result.interaction_id = sdMatch[0];
-          if (timeMatch) result.fault_time = timeMatch[0];
-          result.success = !!(result.interaction_id || result.incident_id);
-          break;
+          matchedImIds.push(...imMatches);
+          matchedSdIds.push(...sdMatches);
+
+          const rowMaxSd = sdMatches.length ? [...sdMatches].sort().reverse()[0] : '';
+          if (timeMatch && (!newestRowTime || rowMaxSd >= highestSdSeen)) {
+            newestRowTime = timeMatch[0];
+            if (rowMaxSd) highestSdSeen = rowMaxSd;
+          }
         }
       }
 
+      if (matchedImIds.length > 0) {
+        result.incident_id = [...new Set(matchedImIds)].sort().reverse()[0];
+      }
+      if (matchedSdIds.length > 0) {
+        result.interaction_id = [...new Set(matchedSdIds)].sort().reverse()[0];
+      }
+      if (newestRowTime) {
+        result.fault_time = newestRowTime;
+      }
+      result.success = !!(result.interaction_id || result.incident_id);
+
       // 2. Fallback / Detail View: when HPSM auto-drills into a single record or rows lack circuitId text
       if (!result.interaction_id || !result.incident_id) {
+        const fallbackSdIds = [];
+        const fallbackImIds = [];
         for (const fr of page.frames()) {
           try {
             const html = await fr.evaluate(() => document.body.innerHTML);
-            const sdMatches = html.match(/SD2\d{7}/g) || html.match(/SD\d{8}/g);
-            const imMatches = html.match(/IM2\d{7}/g) || html.match(/IM\d{8}/g);
+            const sdMatches = html.match(/SD2\d{7}/g) || html.match(/SD\d{8}/g) || [];
+            const imMatches = html.match(/IM2\d{7}/g) || html.match(/IM\d{8}/g) || [];
             const timeMatch = html.match(/\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}/);
 
-            if (sdMatches && sdMatches.length > 0 && !result.interaction_id) {
-              result.interaction_id = sdMatches[sdMatches.length - 1];
-            }
-            if (imMatches && imMatches.length > 0 && !result.incident_id) {
-              result.incident_id = imMatches[imMatches.length - 1];
-            }
+            fallbackSdIds.push(...sdMatches);
+            fallbackImIds.push(...imMatches);
             if (timeMatch && !result.fault_time) {
               result.fault_time = timeMatch[0];
             }
           } catch(e) {}
+        }
+        if (!result.interaction_id && fallbackSdIds.length > 0) {
+          result.interaction_id = [...new Set(fallbackSdIds)].sort().reverse()[0];
+        }
+        if (!result.incident_id && fallbackImIds.length > 0) {
+          result.incident_id = [...new Set(fallbackImIds)].sort().reverse()[0];
         }
         result.success = !!(result.interaction_id || result.incident_id);
       }
@@ -415,7 +525,9 @@ class TTSEngine {
    * Searches for existing open tickets for a circuit.
    */
   static async checkExistingTicket(circuitId) {
-    console.log(`[TTSEngine] Checking existing tickets for: ${circuitId}`);
+    const circuitCandidates = TTSEngine.extractCircuitCandidates(circuitId);
+    const primaryCid = circuitCandidates[0] || circuitId;
+    console.log(`[TTSEngine] Checking existing tickets for: ${circuitId} (primary: ${primaryCid})`);
     const browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--ignore-certificate-errors']
@@ -423,18 +535,14 @@ class TTSEngine {
     const page = await browser.newPage({ viewport: { width: 1600, height: 1100 }, ignoreHTTPSErrors: true });
 
     try {
-      await page.goto(TTS_URL, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.fill('#LoginUsername', TTS_USERNAME);
-      await page.fill('#LoginPassword', TTS_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForTimeout(5000);
+      await TTSEngine.loginWithRetry(page);
 
       const searchTicketLink = page.locator("a:has-text('Search Ticket'), [ext\\:tree-node-id*='Search Ticket'] a").first();
       await searchTicketLink.click();
       await page.waitForTimeout(5000);
 
       let formFrame = page.frames().find(f => f.url().includes('detail.do')) || page.frames().find(f => f !== page.mainFrame());
-      await formFrame.locator('#X15').fill(circuitId);
+      await formFrame.locator('#X15').fill(primaryCid);
       const doSearchBtn = await formFrame.$('button:has-text("Search"), input[value="Search"], #btnSearch');
       if (doSearchBtn) await doSearchBtn.click();
       await page.waitForTimeout(5000);
@@ -444,20 +552,40 @@ class TTSEngine {
         return Array.from(document.querySelectorAll('tr, .x-grid3-row')).map(r => r.innerText.trim()).filter(t => t.length > 5);
       });
 
+      const ACTIVE_ROW_STATUSES = [
+        'Open',
+        'Investigation',
+        'Work In Progress',
+        'Dispatched',
+        'Assigned 1st',
+        'Assigned 2nd',
+        'Assigned',
+        'Pending'
+      ];
+
       const openTickets = [];
       for (const row of rows) {
-        if (row.includes(circuitId) && (row.includes('Open') || row.includes('Investigation') || row.includes('Work In Progress'))) {
-          const imMatch = row.match(/IM\d{8}/);
-          const sdMatch = row.match(/SD\d{8}/);
-          if (imMatch) {
+        const matchesCircuit = circuitCandidates.some(cid => row.includes(cid));
+        const matchesStatus = ACTIVE_ROW_STATUSES.some(st => row.includes(st));
+        if (matchesCircuit && matchesStatus) {
+          const imMatch = row.match(/IM2\d{7}/) || row.match(/IM\d{8}/);
+          const sdMatch = row.match(/SD2\d{7}/) || row.match(/SD\d{8}/);
+          if (imMatch || sdMatch) {
             openTickets.push({
-              incident_id: imMatch[0],
+              incident_id: imMatch ? imMatch[0] : null,
               interaction_id: sdMatch ? sdMatch[0] : null,
               raw_row: row
             });
           }
         }
       }
+
+      // Sort descending by interaction_id / incident_id so newest ticket is first
+      openTickets.sort((a, b) => {
+        const keyA = a.interaction_id || a.incident_id || '';
+        const keyB = b.interaction_id || b.incident_id || '';
+        return keyB.localeCompare(keyA);
+      });
 
       return {
         has_open_ticket: openTickets.length > 0,

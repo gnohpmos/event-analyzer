@@ -174,9 +174,10 @@ export const TTSWorkOrderCard: React.FC<TTSWorkOrderCardProps> = ({
                 <span
                   className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
                     incident.tts_status.toLowerCase().includes('resolved') ||
-                    incident.tts_status.toLowerCase().includes('close')
+                    incident.tts_status.toLowerCase().includes('close') ||
+                    incident.tts_status.toLowerCase().includes('complete')
                       ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                      : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                   }`}
                 >
                   {incident.tts_status}

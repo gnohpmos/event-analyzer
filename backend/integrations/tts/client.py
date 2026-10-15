@@ -9,7 +9,7 @@ class TTSClient:
     """
     HTTP Client communicating with the dedicated tts-service sub-container.
     """
-    def __init__(self, base_url: Optional[str] = None, timeout: int = 120):
+    def __init__(self, base_url: Optional[str] = None, timeout: int = 240):
         self.base_url = (base_url or os.getenv('TTS_SERVICE_URL', 'http://tts-service:8088')).rstrip('/')
         self.timeout = timeout
 

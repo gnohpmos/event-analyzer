@@ -149,8 +149,11 @@ button, input, select, textarea, div, section, header, footer, table {
 /* --- Light Mode Color Overrides --- */
 .light .text-cyan-200,
 .light .text-cyan-300,
-.light .text-cyan-400 {
-  color: hsl(192 85% 26%) !important;
+.light .text-cyan-400,
+.light .text-sky-200,
+.light .text-sky-300,
+.light .text-sky-400 {
+  color: hsl(199 85% 30%) !important;
 }
 
 .light .text-amber-200,
@@ -165,7 +168,9 @@ button, input, select, textarea, div, section, header, footer, table {
 }
 
 .light .text-rose-300,
-.light .text-rose-400 {
+.light .text-rose-400,
+.light .text-red-300,
+.light .text-red-400 {
   color: hsl(350 75% 36%) !important;
 }
 
@@ -175,6 +180,7 @@ button, input, select, textarea, div, section, header, footer, table {
   color: hsl(221 72% 40%) !important;
 }
 
+.light .text-purple-200,
 .light .text-purple-300,
 .light .text-purple-400 {
   color: hsl(270 65% 38%) !important;
@@ -185,6 +191,7 @@ button, input, select, textarea, div, section, header, footer, table {
   color: hsl(24 85% 34%) !important;
 }
 
+.light .text-indigo-200,
 .light .text-indigo-300,
 .light .text-indigo-400 {
   color: hsl(235 65% 42%) !important;
@@ -238,8 +245,11 @@ button, input, select, textarea, div, section, header, footer, table {
 /* --- Earth Tone Mode Color Overrides (Warm Organic Hues) --- */
 .earth .text-cyan-200,
 .earth .text-cyan-300,
-.earth .text-cyan-400 {
-  color: hsl(185 55% 26%) !important;
+.earth .text-cyan-400,
+.earth .text-sky-200,
+.earth .text-sky-300,
+.earth .text-sky-400 {
+  color: hsl(198 70% 28%) !important;
 }
 
 .earth .text-amber-200,
@@ -254,7 +264,9 @@ button, input, select, textarea, div, section, header, footer, table {
 }
 
 .earth .text-rose-300,
-.earth .text-rose-400 {
+.earth .text-rose-400,
+.earth .text-red-300,
+.earth .text-red-400 {
   color: hsl(12 65% 36%) !important;
 }
 
@@ -264,6 +276,7 @@ button, input, select, textarea, div, section, header, footer, table {
   color: hsl(205 50% 30%) !important;
 }
 
+.earth .text-purple-200,
 .earth .text-purple-300,
 .earth .text-purple-400 {
   color: hsl(280 40% 34%) !important;
@@ -274,6 +287,7 @@ button, input, select, textarea, div, section, header, footer, table {
   color: hsl(20 70% 36%) !important;
 }
 
+.earth .text-indigo-200,
 .earth .text-indigo-300,
 .earth .text-indigo-400 {
   color: hsl(215 45% 34%) !important;

@@ -259,13 +259,22 @@ flowchart TD
 ```
 
 ### รายละเอียดฟังก์ชันสำคัญของ osTicket Gateway:
-1. **Circuit Peer Auto-Propagation**:
+1. **Automated osTicket Creation & Admin Control (ระบบเปิดตั๋วอัตโนมัติพร้อมสวิตช์เปิด/ปิด)**:
+   - มีระบบเปิดตั๋ว osTicket อัตโนมัติเมื่อ Incident ได้รับการยืนยันและมีหมายเลขตั๋ว NT TTS เรียบร้อยแล้ว
+   - สามารถควบคุมการเปิด-ปิดได้จากหน้าเว็บ **Admin Settings** (`/settings`) ผ่านการตั้งค่า `OSTICKET_AUTO_CREATE` (ค่าเริ่มต้น: ปิดใช้งาน / Manual Only เพื่อความปลอดภัย)
+   - ปรับแต่งพารามิเตอร์ได้ยืดหยุ่น:
+     - `OSTICKET_AUTO_CREATE_DELAY_SECONDS`: ระยะเวลาหน่วงก่อนเปิดตั๋วอัตโนมัติ (Default: `0` วินาที)
+     - `OSTICKET_TOPIC_ID`: รหัสหมวดหมู่ Help Topic (Default: `27` CATMA TTS)
+     - `OSTICKET_SLA_ID`: แผนการให้บริการ SLA (Default: `10`)
+     - `OSTICKET_SENDER_NAME` & `OSTICKET_SENDER_EMAIL`: ชื่อและอีเมลผู้เปิดตั๋ว
+   - ทำงานผ่าน Celery Beat (`auto-open-pending-ostickets-every-minute`) และ Task Chain หลังการซิงค์ TTS สำเร็จ พร้อมกลไกความปลอดภัยตรวจสอบซ้ำและข้ามการทำงานอัตโนมัติหากตั้งค่าปิดอยู่
+2. **Circuit Peer Auto-Propagation**:
    - ในโครงสร้างเครือข่าย วงจร Point-to-Point เมื่อเกิด Down จะสร้าง Incident ขึ้น 2 รายการสำหรับอุปกรณ์หัว-ท้าย (Node A และ Node B)
-   - เมื่อเจ้าหน้าที่กดเปิดตั๋ว osTicket ที่ฝั่งใดฝั่งหนึ่ง ระบบจะ **ค้นหา Incident คู่ขนานของวงจรเดียวกัน (`circuit_id` หรือ `ticket_id_tss` เดียวกัน) และนำเลขตั๋ว osTicket ไปบันทึกให้อีกฝั่งโดยอัตโนมัติทันที** ทั้งสองฝั่งจึงแสดงผลตั๋วตรงกันเสมอ
-2. **Background & On-Demand Fallback Sync**:
+   - เมื่อมีการเปิดตั๋ว osTicket ที่ฝั่งใดฝั่งหนึ่ง (ไม่ว่าจะเปิดผ่านระบบอัตโนมัติ หรือเจ้าหน้าที่กดเปิดเอง) ระบบจะ **ค้นหา Incident คู่ขนานของวงจรเดียวกัน (`circuit_id` หรือ `ticket_id_tss` เดียวกัน) และนำเลขตั๋ว osTicket ไปบันทึกให้อีกฝั่งโดยอัตโนมัติทันที** ทั้งสองฝั่งจึงแสดงผลตั๋วตรงกันเสมอ
+3. **Background & On-Demand Fallback Sync**:
    - ใน [`IncidentEnrichmentService`](file:///root/container/event-analyzer/backend/incidents/services/enrichment_service.py) ฟังก์ชัน `_enrich_single_link` จะตรวจเช็กว่าหาก Incident ตัวใดยังไม่มี `ticket_id_osticket` จะทำการดึงเลขตั๋วจาก Peer Incident หรือค้นหาตรงไปยัง osTicket เพื่อนำมาผูกให้อัตโนมัติ
    - เมื่อกดปุ่ม **"ซิงค์ Ticket"** ใน Modal หน้าบ้าน ข้อมูล `ticket_id_osticket` จะได้รับการอัปเดตแบบ Real-time
-3. **Timezone Precision (+7 UTC Conversion)**:
+4. **Timezone Precision (+7 UTC Conversion)**:
    - ฟังก์ชัน `OSTicketPayloadBuilder.format_down_time()` จะแปลงเวลาเหตุการณ์ Down จากเวลาไทย (Asia/Bangkok) ให้เป็นเวลาสากล **UTC (`%Y-%m-%d %H:%M:%S`)** ก่อนส่งไปยัง REST API
    - เมื่อ PHP Engine ของ osTicket แสดงผลผ่าน Staff Web Portal จะทำการบวกชดเชย +7 ชั่วโมงเข้าสู่เวลาท้องถิ่นไทย ทำให้ค่า **`Down Time` บนหน้าเว็บ osTicket แสดงผลตรงกับเวลาที่เกิดเหตุจริง 100% ไม่เลื่อนไปข้างหน้า 7 ชม. อีกต่อไป**
 

@@ -262,10 +262,12 @@ export const IncidentsView: React.FC = () => {
                                 <span className="font-mono tracking-tight">{incident.ticket_id_tss}</span>
                               </span>
                               {incident.tts_status && (
-                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase ${
-                                  incident.tts_status.toLowerCase().includes('resolved') || incident.tts_status.toLowerCase().includes('close')
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase ${
+                                  incident.tts_status.toLowerCase().includes('resolved') ||
+                                  incident.tts_status.toLowerCase().includes('close') ||
+                                  incident.tts_status.toLowerCase().includes('complete')
                                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                                 }`}>
                                   {incident.tts_status === 'Work In Progress' ? 'WIP' : incident.tts_status}
                                 </span>

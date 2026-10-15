@@ -15,7 +15,7 @@
 | **Backend & API** | `eventanalyzer-backend` | Django 5.0 + DRF + Gunicorn | `8000` / - | Business Logic, REST API, Event & Incident Engine |
 | **Task Worker** | `eventanalyzer-celery` | Celery 5.4 (Worker & Beat) | - | งานเบื้องหลัง: Periodic Sync, Soak Timers, Verification |
 | **Frontend & Proxy** | `eventanalyzer-frontend` | React 18 + TS + Tailwind + Nginx | `80` / **`8089`** | SPA Dashboard, Incident Management, Nginx Reverse Proxy |
-| **TTS Automation** | `eventanalyzer-tts` | Node.js + Puppeteer Engine | `8088` / - | บริการเปิดและค้นหาตั๋ว NT TTS Headless Automation |
+| **TTS Automation** | `eventanalyzer-tts` | Node.js + Playwright (Chromium) | `3500` / - | บริการเปิดและค้นหาตั๋ว NT TTS อัตโนมัติพร้อมคิวควบคุม Session |
 
 ---
 
@@ -38,12 +38,21 @@
   - `Link Flapping` (ลิงก์สวิงเกินเกณฑ์)
   - `Connectivity Loss` (การเชื่อมต่อขาดหาย)
 
-### 4. NT TTS Trouble Ticket Integration
+### 4. NT TTS Trouble Ticket Integration & Continuous Lifecycle Sync
 - **Cache-First Architecture**: แคชข้อมูล Alarms และตั๋วจาก IPGET ใน Redis ช่วยให้การค้นหาเร็วระดับมิลลิวินาที
-- **4-Point Ticket Eligibility Policy**: ประเมินความพร้อมก่อนเปิดตั๋ว (Alarm ยืนยัน, Down ต่อเนื่อง > 15 นาที, มี Circuit ID, ยังไม่มีตั๋วเปิดอยู่)
-- **Smart Ticket Upgrade & Historical Preservation**: อัปเกรดตั๋วรอบปัจจุบันอัตโนมัติเมื่อมีตั๋ว `Work In Progress` ใหม่เข้ามา โดย **ไม่แก้ไขหรือเขียนทับประวัติตั๋วเก่าย้อนหลัง**
+- **4-Point Ticket Eligibility Policy**: ประเมินความพร้อมก่อนเปิดตั๋ว (Alarm ยืนยันจาก IPGET API 1, มี Circuit ID, Down ต่อเนื่อง $\ge$ 15 นาที, ยังไม่มีตั๋วเปิดอยู่)
+- **Multi-Layer Deduplication & Distributed Lock**:
+  - ใช้ Redis Distributed Lock (`lock:tts_open:circuit:{cid}`) ร่วมกับ `select_for_update()` ป้องกันการกดเปิดตั๋วซ้ำพร้อมกัน
+  - ตรวจสอบตั๋วจาก Peer Incident และตรวจสอบสดจาก IPGET API 3 (`force_refresh=True`) ก่อนสั่งรัน Playwright
+  - **Peer Auto-Propagation**: เมื่อเปิดหรือเชื่อมโยงตั๋ว `SD...` สำเร็จ ระบบจะกระจายเลขตั๋ว สถานะ `tts_status` และ `repair_team` ไปยัง Incident คู่ขนานของวงจรเดียวกันให้อัตโนมัติ
+- **Resilient Playwright Automation Engine (`tts-service`)**:
+  - **Session Conflict Auto-Recovery**: ตรวจจับ `Maximum active logins` และเคลียร์ Session ค้างผ่าน `goodbye.jsp` พร้อม Login ใหม่อัตโนมัติ
+  - **Composite Circuit ID & CSS Pull Fallback**: รองรับรหัสวงจรคู่ (เช่น `TBB0005562+TBB147010`) และดึงข้อมูลจากระบบ CSS (`#X24Btn`) อัตโนมัติเมื่อไม่พบในแคชของ NT TTS
+  - **Accurate Ticket Confirmation**: คัดกรองสถานะ Active (`Open`, `Assigned 1st`, `Assigned 2nd`, `Work In Progress`, `Pending` ฯลฯ) และเรียงลำดับเลือกหมายเลข `SD...` / `IM...` ใบใหม่ล่าสุดเสมอ
+- **Continuous 2-Minute Active Ticket Sync**: งานเบื้องหลังทุก 2 นาที ดึงอัปเดตสถานะตั๋ว (`Open` $\rightarrow$ `Assigned 2nd` $\rightarrow$ `Work In Progress` $\rightarrow$ `Complete`), หน่วยงานซ่อม (`repair_team`), สาเหตุจริง (`actual_cause`) และวิธีแก้ไข (`resolution`) จาก IPGET API 3 แบบ Batch พร้อมปลดตั๋วเก่าที่ค้าง (`Rejected` / `Complete` เกิน 6 ชม. ก่อนเกิดเหตุ) อัตโนมัติ
 
 ### 5. osTicket (MSTicket) Integration & Circuit Peer Auto-Propagation
+- **Automated osTicket Opening & Admin Toggle Control**: รองรับการเปิดตั๋วอัตโนมัติเมื่อ Incident ยืนยันและมีหมายเลขตั๋ว NT TTS แล้ว พร้อมเมนูสวิตช์เปิด/ปิดระบบอัตโนมัติ (Default: ปิดใช้งาน / Manual Only) และปรับแต่ง Delay, Topic ID, SLA ID, ชื่อ-อีเมลผู้เปิดตั๋ว ได้จากหน้า Admin Settings
 - **5-Layered Deduplication & Concurrency Protection**:
   - Layer 1: In-memory & Database `select_for_update` Checks
   - Layer 2: Redis Distributed Locking (Scoped ตาม Circuit ID)
@@ -52,6 +61,12 @@
   - Layer 4.5: Real-time Search ตรวจจับตั๋วเดิมที่ NOC เปิดไว้แล้วบน osTicket Staff Portal
 - **Circuit Peer Auto-Propagation**: เมื่อตั๋ว osTicket ถูกเปิดขึ้นที่ฝั่งใดฝั่งหนึ่งของวงจร Point-to-Point (Node A หรือ Node B) ระบบจะ **กระจายเลขตั๋ว osTicket ไปยัง Incident คู่ขนานของวงจรเดียวกันทันทีโดยอัตโนมัติ**
 - **Precise Timezone Handling**: ส่งค่าเวลา Down Time ในรูปแบบ UTC เพื่อให้ PHP Engine ของ osTicket บวกชดเชย +7 แสดงผลเวลาท้องถิ่นไทยได้ถูกต้อง 100%
+
+### 6. Network Path Traceroute & Per-Interface / LAG Member Diagnostics
+- **Interactive Topology Path Discovery**: ค้นหาเส้นทาง MPLS/IP จากอุปกรณ์ต้นทางไปยังปลายทางผ่าน SSH/Telnet พร้อมแปลง IP เป็นชื่ออุปกรณ์ผ่าน Reverse DNS (PTR) และแสดงผัง Topology แบบ Interactive
+- **Per-Interface & Bundle-Ether (LAG) Member Deep Inspection**:
+  - ตรวจสอบสุขภาพพอร์ตขาเข้า (Ingress) และขาออก (Egress) ของแต่ละ Hop แบบเจาะลึก (สถานะพอร์ต, Input/Output Rate, Packet Loss, CRC/Input/Output Errors, ค่าแสง Optical DOM Rx/Tx Power)
+  - รองรับการแตกพอร์ตสมาชิก (Member Links) ของ `Bundle-Ether` / `Port-channel` / `Eth-Trunk` อัตโนมัติ เพื่อตรวจจับปัญหา Traffic Loss หรือค่าแสงผิดปกติในระดับพอร์ตสมาชิกได้อย่างแม่นยำ
 
 ---
 
@@ -93,7 +108,7 @@ event-analyzer/
 │
 ├── backend/
 │   ├── Dockerfile                  # Python 3.11-slim container
-│   ├── requirements.txt            # Django, Celery, Redis, psycopg2, pysnmp
+│   ├── requirements.txt            # Django, Celery, Redis, psycopg2, pysnmp, paramiko
 │   ├── entrypoint.sh               # DB/Redis readiness check & migrations
 │   ├── manage.py
 │   ├── analyzer_project/           # Django core settings & Celery config
@@ -104,14 +119,15 @@ event-analyzer/
 │   │   ├── link_engine.py          # Link Outage, Flapping & Soak Timer Engine
 │   │   ├── tasks.py                # Celery Background & Beat Scheduled Tasks
 │   │   └── services/               # Domain Services
-│   │       ├── enrichment_service.py     # IPGET / TTS / osTicket Sync
-│   │       ├── ticket_policy_service.py  # 4-point Ticket Eligibility Checker
+│   │       ├── enrichment_service.py     # IPGET / TTS / osTicket Continuous Sync
+│   │       ├── ticket_policy_service.py  # 4-point Eligibility, Lock & Peer Propagation
 │   │       └── report_service.py         # KPI & Regional Reporting Service
 │   ├── integrations/               # External Integration Gateways
 │   │   ├── prtg/                   # PRTG Webhook Ingestion Adapter
 │   │   ├── ipget/                  # IPGET Alarm & TTS Data Gateway
 │   │   ├── tts/                    # NT TTS REST & Automation Client
-│   │   └── osticket/               # osTicket Gateway (Builder, Searcher, Client)
+│   │   ├── osticket/               # osTicket Gateway (Builder, Searcher, Client)
+│   │   └── wan2lo0/                # Traceroute & Per-Interface / LAG Diagnostics Engine
 │   ├── verification/               # SNMP v2c IF-MIB Verification Client
 │   └── classification/             # Root Cause Decision Engine
 │
@@ -127,16 +143,19 @@ event-analyzer/
 │       └── components/             # UI Components
 │           ├── DashboardView.tsx   # Executive metrics, MTTR, charts
 │           ├── IncidentsView.tsx   # Real-time incident table with live filters
+│           ├── TracerouteView.tsx  # Interactive Path Traceroute & Port/LAG Diagnostics
+│           ├── SettingsView.tsx    # System & Integration Settings
 │           ├── IncidentDetailModal.tsx # Full timeline, RCA override, TTS/osTicket
 │           └── incident/
 │               └── TTSWorkOrderCard.tsx # Ticket eligibility & Work order actions
 │
 └── tts-service/
-    ├── Dockerfile                  # Node.js + Chromium Puppeteer container
+    ├── Dockerfile                  # Node.js + Playwright Chromium container
     ├── package.json
     └── src/
-        ├── server.js               # Express API (Port 8088)
-        └── tts_engine.js           # Headless Web Automation for NT TTS
+        ├── index.js                # Express API & ExecutionQueue (Port 3500)
+        ├── queue.js                # Single-concurrency queue for NT TTS session safety
+        └── tts_engine.js           # Headless Playwright Automation for NT TTS
 ```
 
 ---
@@ -172,9 +191,10 @@ event-analyzer/
 | `OSTICKET_STAFF_USER` | `somphong` | บัญชี Staff สำหรับค้นหาตั๋ว Real-time |
 | `OSTICKET_STAFF_PASS` | `Phong@1797` | รหัสผ่าน Staff สำหรับค้นหาตั๋ว Real-time |
 | **NT TTS Integration** | | |
-| `TTS_SERVICE_URL` | `http://tts-service:8088` | URL ของบริการ Automation `tts-service` |
+| `TTS_SERVICE_URL` | `http://tts-service:3500` | URL ของบริการ Automation `tts-service` |
 | `TTS_USERNAME` | `catma` | บัญชีผู้ใช้งานระบบ NT TTS |
 | `TTS_PASSWORD` | *(Password)* | รหัสผ่านระบบ NT TTS |
+| `TTS_TIMEOUT` | `240` | ระยะเวลารอคิวและเปิดตั๋ว NT TTS สูงสุด (วินาที) |
 
 ---
 
@@ -188,6 +208,8 @@ event-analyzer/
 | `/api/v1/incidents/{id}/` | `GET`, `PATCH` | ดึงรายละเอียด และ Override การจำแนกสาเหตุ (Manual RCA) |
 | `/api/v1/incidents/{id}/sync-ticket/` | `POST` | ซิงค์ข้อมูล Trouble Ticket (NT TTS และ osTicket) แบบ Real-time |
 | `/api/v1/incidents/{id}/ticket-eligibility/` | `GET` | ตรวจสอบเกณฑ์ 4 ข้อสำหรับความพร้อมในการเปิดตั๋ว |
-| `/api/v1/incidents/{id}/open-ticket/` | `POST` | สั่งเปิดตั๋ว NT TTS อัตโนมัติ |
+| `/api/v1/incidents/{id}/open-ticket/` | `POST` | สั่งเปิดตั๋ว NT TTS อัตโนมัติพร้อมป้องกันตั๋วซ้ำและกระจายเลขตั๋วสู่คู่ขนาน |
 | `/api/v1/incidents/{id}/open-osticket/` | `POST` | สั่งเปิดตั๋ว osTicket และกระจายเลขตั๋วไปยังคู่ขนานอัตโนมัติ |
+| `/api/v1/integrations/wan2lo0/trace/` | `POST` | ค้นหาเส้นทางเครือข่าย (Traceroute) พร้อมข้อมูล Reverse DNS และอินเทอร์เฟซ |
+| `/api/v1/integrations/wan2lo0/inspect-hop/` | `POST` | ตรวจสอบสุขภาพพอร์ต ค่าแสง DOM และพอร์ตสมาชิก Bundle-Ether ราย Hop |
 | `/api/v1/reports/summary/` | `GET` | ดึงข้อมูลสถิติภาพรวม MTTR, RCA Breakdown, และ Regional Tree |

@@ -77,6 +77,42 @@ DEFAULT_SETTINGS = {
         'description': 'Timeout in seconds for SSH connection and command execution',
         'is_secret': False,
     },
+    'OSTICKET_AUTO_CREATE': {
+        'value': 'False',
+        'category': 'INTEGRATION',
+        'description': 'Enable or disable automated osTicket creation for confirmed incidents',
+        'is_secret': False,
+    },
+    'OSTICKET_AUTO_CREATE_DELAY_SECONDS': {
+        'value': '0',
+        'category': 'INTEGRATION',
+        'description': 'Delay in seconds after NT TTS ticket is linked before automatically creating osTicket (0 = immediate)',
+        'is_secret': False,
+    },
+    'OSTICKET_TOPIC_ID': {
+        'value': '27',
+        'category': 'INTEGRATION',
+        'description': 'Default osTicket Help Topic ID (27 = CATMA TTS)',
+        'is_secret': False,
+    },
+    'OSTICKET_SLA_ID': {
+        'value': '10',
+        'category': 'INTEGRATION',
+        'description': 'Default osTicket SLA Plan ID',
+        'is_secret': False,
+    },
+    'OSTICKET_SENDER_NAME': {
+        'value': 'พงศธร พันสนิท',
+        'category': 'INTEGRATION',
+        'description': 'Default Staff/Sender Name for osTicket creation',
+        'is_secret': False,
+    },
+    'OSTICKET_SENDER_EMAIL': {
+        'value': 'p.pansanit@gmail.com',
+        'category': 'INTEGRATION',
+        'description': 'Default Staff/Sender Email for osTicket creation',
+        'is_secret': False,
+    },
 }
 
 

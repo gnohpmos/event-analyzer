@@ -418,4 +418,316 @@ export interface IncidentReportData {
   incidents: SerializedReportIncident[];
 }
 
+export interface Wan2Lo0Node {
+  ip_nms: string;
+  hostname: string;
+  model: string;
+  location: string;
+  area: string;
+}
 
+export interface Wan2Lo0ActiveIncident {
+  id: number;
+  incident_number: string;
+  incident_type: 'DEVICE' | 'LINK';
+  status: IncidentStatus;
+  node_name: string;
+  device_ip: string;
+  interface_name?: string;
+  circuit_id?: string;
+  osticket_id?: string;
+  tts_id?: string;
+  down_time?: string | null;
+}
+
+export interface Wan2Lo0Record {
+  ip_address: string;
+  ip_loopback: string;
+  interface: string;
+  subnet: string;
+  description: string;
+  time: string;
+  is_auto_peer: boolean;
+  direction: 'forward' | 'return' | 'both' | 'general';
+  rtt_ms?: number | null;
+  hostname: string;
+  model: string;
+  area: string;
+  circuit: string;
+  hop_label?: string;
+  active_incidents: Wan2Lo0ActiveIncident[];
+}
+
+export interface Wan2Lo0Device {
+  loopback: string;
+  hostname: string;
+  model: string;
+  area: string;
+  interfaces: Wan2Lo0Record[];
+  active_incidents: Wan2Lo0ActiveIncident[];
+}
+
+export interface Wan2Lo0Link {
+  type: 'p2p' | 'standalone';
+  direction: 'forward' | 'return' | 'general';
+  dev_a: string;
+  hostname_a: string;
+  ip_a: string;
+  intf_a: string;
+  dev_b?: string | null;
+  hostname_b?: string | null;
+  ip_b?: string | null;
+  intf_b?: string | null;
+  rtt_ms?: number | null;
+  circuit: string;
+  description: string;
+  active_incidents: Wan2Lo0ActiveIncident[];
+}
+
+export interface Wan2Lo0TopologyInterface {
+  ip_loopback: string;
+  hostname: string;
+  model: string;
+  area: string;
+  interface: string;
+  ip_address: string;
+  role: string;
+  direction: string;
+  link_index: number;
+  circuit: string;
+  description: string;
+}
+
+export interface Wan2Lo0JsEdge {
+  index: number;
+  source: string;
+  target: string;
+  direction: string;
+  dev_a?: string | null;
+  intf_a?: string | null;
+  ip_a?: string | null;
+  dev_b?: string | null;
+  intf_b?: string | null;
+  ip_b?: string | null;
+}
+
+export interface Wan2Lo0AnalysisResult {
+  mode: 'general' | 'asymmetric';
+  auto_peer: boolean;
+  exec_time: number;
+  stats: {
+    input_ips_count: number;
+    matched_interfaces_count: number;
+    routers_count: number;
+    links_count: number;
+    not_found_count: number;
+    active_incidents_count: number;
+  };
+  not_found_ips: string[];
+  devices: Wan2Lo0Device[];
+  dev_node_map: Record<string, string>;
+  links: Wan2Lo0Link[];
+  records_fwd: Wan2Lo0Record[];
+  records_ret: Wan2Lo0Record[];
+  records_gen: Wan2Lo0Record[];
+  records_all: Wan2Lo0Record[];
+  topology_interfaces: Wan2Lo0TopologyInterface[];
+  active_incidents: Wan2Lo0ActiveIncident[];
+  mermaid_code: string;
+  js_edges: Wan2Lo0JsEdge[];
+}
+
+export interface SingleTraceExecution {
+  success: boolean;
+  method: 'router_ssh' | 'server_os';
+  source_router: string;
+  target_ip: string;
+  command?: string;
+  error?: string;
+  elapsed_seconds: number;
+  hops: Array<{
+    hop: number;
+    ip: string;
+    rtt_ms?: number | null;
+    raw: string;
+  }>;
+  formatted_text: string;
+  raw_output: string;
+}
+
+export interface LiveTracerouteResponse {
+  trace_type: 'router_ssh' | 'server_os';
+  forward_trace: SingleTraceExecution;
+  return_trace?: SingleTraceExecution | null;
+  analysis: Wan2Lo0AnalysisResult;
+}
+
+export interface SegmentedOAMHop {
+  hop: number;
+  segment_index: number;
+  ip: string;
+  code: string;
+  status: string;
+  labels: (number | string)[];
+  rtt_ms?: number | null;
+  is_domain_border: boolean;
+  raw: string;
+}
+
+export interface SegmentedOAMDomain {
+  domain_index: number;
+  domain_name: string;
+  source_router: string;
+  source_hostname: string;
+  source_model: string;
+  target_router: string;
+  target_hostname: string;
+  target_model: string;
+  driver_os: string;
+  nexthop?: string | null;
+  bgp_label?: number | string | null;
+  local_label?: number | string | null;
+  is_final_segment: boolean;
+  elapsed_seconds: number;
+  bgp_command?: string;
+  trace_command?: string;
+  hops: Array<{
+    hop: number;
+    ip: string;
+    code: string;
+    status: string;
+    labels: (number | string)[];
+    rtt_ms?: number | null;
+    raw: string;
+  }>;
+  raw_trace?: string;
+  error?: string;
+}
+
+export interface SegmentedMPLSTraceResponse {
+  success: boolean;
+  method: 'segmented_mpls_oam';
+  source_router: string;
+  source_hostname: string;
+  target_ip: string;
+  target_hostname: string;
+  total_domains: number;
+  total_elapsed_seconds: number;
+  segments: SegmentedOAMDomain[];
+  return_segments?: SegmentedOAMDomain[];
+  stitched_hops: SegmentedOAMHop[];
+  return_stitched_hops?: SegmentedOAMHop[];
+  formatted_text: string;
+  return_formatted_text?: string;
+  analysis: Wan2Lo0AnalysisResult;
+  error?: string;
+}
+
+export interface InterfaceHealthItem {
+  ip_loopback: string;
+  hostname: string;
+  model: string;
+  area: string;
+  interface: string;
+  ip_address: string;
+  role: string;
+  direction: string;
+  link_index: number;
+  circuit: string;
+  reachable: boolean;
+  collection_method: 'SSH_CLI' | 'SNMP_V2C' | 'NONE';
+  health_status: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNREACHABLE';
+  is_active_loss: boolean;
+  issues: string[];
+  admin_status: string;
+  oper_status: string;
+  mtu_bytes?: number | null;
+  bw_kbps?: number | null;
+  rx_mbps: number;
+  tx_mbps: number;
+  rx_pps: number;
+  tx_pps: number;
+  rx_load_pct: number;
+  tx_load_pct: number;
+  in_errors: number;
+  out_errors: number;
+  crc_errors: number;
+  frame_errors: number;
+  runts: number;
+  giants: number;
+  in_drops: number;
+  out_drops: number;
+  delta_crc: number;
+  delta_in_errors: number;
+  delta_out_errors: number;
+  delta_in_drops: number;
+  delta_out_drops: number;
+  carrier_transitions: number;
+  last_flapped: string;
+  tx_power_dbm?: number | null;
+  rx_power_dbm?: number | null;
+  is_bundle?: boolean;
+  bundle_summary?: BundleSummary | null;
+  members?: BundleMemberDiagnostic[];
+}
+
+export interface BundleMemberDiagnostic {
+  member_interface: string;
+  lag_state: string;
+  admin_status: string;
+  oper_status: string;
+  health_status: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNREACHABLE';
+  bw_kbps?: number | null;
+  rx_mbps: number;
+  tx_mbps: number;
+  rx_load_pct: number;
+  tx_load_pct: number;
+  in_errors: number;
+  out_errors: number;
+  crc_errors: number;
+  in_drops: number;
+  out_drops: number;
+  delta_crc: number;
+  delta_in_errors: number;
+  delta_out_errors: number;
+  delta_in_drops: number;
+  delta_out_drops: number;
+  rx_power_dbm?: number | null;
+  tx_power_dbm?: number | null;
+  issues: string[];
+}
+
+export interface BundleSummary {
+  bundle_type: 'bundle_ether' | 'port_channel';
+  parent_interface: string;
+  sub_interface?: string | null;
+  total_members: number;
+  active_members: number;
+  down_members: number;
+  standby_members: number;
+  capacity_loss_pct: number;
+  min_active_links: number;
+  min_links_met: boolean;
+  total_bw_kbps?: number | null;
+  effective_bw_kbps?: number | null;
+}
+
+export interface InterfaceInspectionResponse {
+  elapsed_seconds: number;
+  measure_delta: boolean;
+  delta_interval_sec: number;
+  summary: {
+    total_checked: number;
+    healthy_count: number;
+    warning_count: number;
+    critical_count: number;
+    unreachable_count: number;
+    total_bundles?: number;
+    degraded_bundles?: number;
+    mtu_consistent: boolean;
+    min_mtu?: number | null;
+    max_mtu?: number | null;
+  };
+  results: InterfaceHealthItem[];
+  by_key: Record<string, InterfaceHealthItem>;
+}

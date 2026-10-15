@@ -139,10 +139,20 @@ def sync_pending_tss_tickets_task(interval_hour: int = 72):
     Refreshes IPGET alarm cache in Redis (force_refresh=True) and
     enriches any pending LINK or DEVICE incidents that require ticket sync.
     Delegates orchestration to IncidentEnrichmentService.
+    Also triggers osTicket auto-creation if enabled.
     """
     from incidents.services import IncidentEnrichmentService
     service = IncidentEnrichmentService()
-    return service.enrich_pending_incidents(interval_hour=interval_hour)
+    enrich_result = service.enrich_pending_incidents(interval_hour=interval_hour)
+
+    try:
+        from integrations.osticket import OSTicketClient
+        if OSTicketClient.is_auto_create_enabled():
+            auto_open_pending_ostickets_task.delay()
+    except Exception as e:
+        logger.debug(f"Failed to trigger auto_open_pending_ostickets_task: {e}")
+
+    return enrich_result
 
 
 @shared_task
@@ -156,5 +166,54 @@ def sync_single_incident_ticket_task(incident_id: int, force_refresh: bool = Fal
     from incidents.services import IncidentEnrichmentService
     service = IncidentEnrichmentService()
     return service.enrich_single_incident(incident_id, force_refresh=force_refresh)
+
+
+@shared_task
+def auto_open_pending_ostickets_task():
+    """
+    Automated osTicket Worker Task (Scheduled every 60s):
+    Checks if automated osTicket creation is enabled in system settings.
+    If enabled, discovers active incidents that have NT TTS tickets but no osTicket,
+    and safely opens tickets using OSTicketClient (with deduplication and peer propagation).
+    """
+    from integrations.osticket import OSTicketClient
+    client = OSTicketClient()
+    if not client.is_auto_create_enabled():
+        return {"status": "skipped", "reason": "auto_create_disabled"}
+
+    from incidents.models import Incident
+    from common.constants import IncidentStatus
+
+    candidate_incidents = list(
+        Incident.objects
+        .select_related('primary_device')
+        .filter(status__in=IncidentStatus.ACTIVE_STATUSES, ticket_id_osticket='')
+        .exclude(ticket_id_tss='')
+        .exclude(osticket_status=OSTicketClient.STATUS_PENDING)
+        .order_by('id')
+    )
+
+    results = []
+    for inc in candidate_incidents:
+        # Refresh only mutable ticket/status fields so peer-propagated tickets are seen without clearing select_related
+        inc.refresh_from_db(fields=['status', 'ticket_id_osticket', 'osticket_status', 'ticket_id_tss'])
+        if inc.ticket_id_osticket:
+            continue
+
+        res = client.auto_open_ticket_if_eligible(inc)
+        if res and res.get('success'):
+            results.append({
+                'incident': inc.incident_number,
+                'ticket_id': res.get('ticket_id'),
+                'reused': res.get('reused', False),
+            })
+
+    return {
+        "status": "success",
+        "processed": len(candidate_incidents),
+        "created_count": len(results),
+        "results": results,
+    }
+
 
 

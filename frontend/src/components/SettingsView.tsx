@@ -7,6 +7,7 @@ import { SNMPSettingsCard } from './settings/subcomponents/SNMPSettingsCard';
 import { SSHSettingsCard } from './settings/subcomponents/SSHSettingsCard';
 import { BusinessThresholdsCard } from './settings/subcomponents/BusinessThresholdsCard';
 import { PRTGSettingsCard } from './settings/subcomponents/PRTGSettingsCard';
+import { OSTicketSettingsCard } from './settings/subcomponents/OSTicketSettingsCard';
 
 export const SettingsView: React.FC = () => {
   const settings = useSettings();
@@ -131,6 +132,23 @@ export const SettingsView: React.FC = () => {
         />
 
         <PRTGSettingsCard prtgToken={settings.prtgToken} />
+        
+        <OSTicketSettingsCard
+          osticketAutoCreate={settings.osticketAutoCreate}
+          setOsticketAutoCreate={settings.setOsticketAutoCreate}
+          osticketTopicId={settings.osticketTopicId}
+          setOsticketTopicId={settings.setOsticketTopicId}
+          osticketSlaId={settings.osticketSlaId}
+          setOsticketSlaId={settings.setOsticketSlaId}
+          osticketDelaySeconds={settings.osticketDelaySeconds}
+          setOsticketDelaySeconds={settings.setOsticketDelaySeconds}
+          osticketSenderName={settings.osticketSenderName}
+          setOsticketSenderName={settings.setOsticketSenderName}
+          osticketSenderEmail={settings.osticketSenderEmail}
+          setOsticketSenderEmail={settings.setOsticketSenderEmail}
+          saving={settings.savingOSTicket}
+          onSave={settings.handleSaveOSTicketSettings}
+        />
       </div>
 
       {/* Confirmation Dialog Modal */}

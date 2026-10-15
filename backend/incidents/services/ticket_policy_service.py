@@ -8,9 +8,13 @@ Enforces the 4 strict business rules:
 4. Must not already have an open ticket in TTS
 """
 import logging
-from typing import Dict, Any, Optional, Tuple
+import os
+import re
+from contextlib import contextmanager
+from typing import Dict, Any, List, Optional, Tuple
 from django.utils import timezone
 
+from common.constants import IncidentStatus, TimelineEventType
 from incidents.models import Incident
 from integrations.ipget import IPGETClient
 from integrations.tts import TTSClient
@@ -18,12 +22,133 @@ from integrations.tts import TTSClient
 logger = logging.getLogger(__name__)
 
 SUSTAINED_DOWN_SECONDS = 900  # 15 minutes
+CLOSED_TTS_STATUSES = ('Complete', 'Closed', 'Resolved', 'Rejected', 'Cancelled', 'Cancel')
 
 
 class TicketPolicyService:
     def __init__(self, ipget_client: Optional[IPGETClient] = None, tts_client: Optional[TTSClient] = None):
         self.ipget = ipget_client or IPGETClient()
         self.tts = tts_client or TTSClient()
+
+    @staticmethod
+    def extract_circuit_candidates(circuit_id: str) -> List[str]:
+        """
+        Extracts candidate circuit IDs from potentially composite strings
+        such as 'TBB0005562+TBB147010' or 'TBB145014/TBB145015'.
+        """
+        if not circuit_id:
+            return []
+        raw = circuit_id.strip()
+        candidates: List[str] = []
+        parts = [p.strip() for p in re.split(r'[+,/;\s]+', raw) if p.strip()]
+        for p in parts:
+            if p not in candidates:
+                candidates.append(p)
+        if raw not in candidates:
+            candidates.append(raw)
+        return candidates
+
+    @staticmethod
+    @contextmanager
+    def redis_lock_circuit(lock_key: str, expire: int = 240):
+        """
+        Distributed lock context manager using Redis to prevent concurrent
+        duplicate NT TTS ticket creation for the same circuit.
+        """
+        lock = None
+        acquired = False
+        try:
+            import redis
+            redis_host = os.getenv('REDIS_HOST', 'redis')
+            r = redis.Redis(host=redis_host, port=6379, db=1, socket_timeout=2)
+            lock = r.lock(lock_key, timeout=expire)
+            acquired = bool(lock.acquire(blocking=False))
+        except Exception as e:
+            logger.warning(f"TicketPolicyService: Error acquiring redis lock {lock_key}: {e}")
+            acquired = True
+
+        try:
+            yield acquired
+        finally:
+            if acquired and lock:
+                try:
+                    lock.release()
+                except Exception as e:
+                    logger.debug(f"TicketPolicyService: Error releasing redis lock {lock_key}: {e}")
+
+    def find_active_circuit_tts_ticket(self, circuit_id: str, exclude_incident_id: Optional[int] = None) -> Optional[Incident]:
+        """
+        Checks if any other active incident on the same circuit already has an active NT TTS ticket.
+        """
+        if not circuit_id:
+            return None
+        candidates = self.extract_circuit_candidates(circuit_id)
+        qs = (
+            Incident.objects
+            .filter(circuit_id__in=candidates, status__in=IncidentStatus.ACTIVE_STATUSES)
+            .exclude(ticket_id_tss='')
+            .exclude(ticket_id_tss__isnull=True)
+            .exclude(tts_status__in=CLOSED_TTS_STATUSES)
+        )
+        if exclude_incident_id:
+            qs = qs.exclude(id=exclude_incident_id)
+        return qs.first()
+
+    def propagate_tts_ticket_to_peers(
+        self,
+        origin_incident: Incident,
+        ticket_id: str,
+        circuit_id: str = "",
+        tts_status: str = "Open",
+        repair_team: str = "",
+        incident_id_im: Optional[str] = None,
+        is_reused: bool = False,
+    ) -> int:
+        """
+        Auto-propagates NT TTS ticket number, status, and repair team to all active
+        peer incidents sharing the same circuit_id.
+        """
+        cid = (circuit_id or origin_incident.circuit_id or '').strip()
+        tid = (ticket_id or origin_incident.ticket_id_tss or '').strip()
+        if not cid or not tid:
+            return 0
+
+        candidates = self.extract_circuit_candidates(cid)
+        peers = (
+            Incident.objects
+            .filter(circuit_id__in=candidates, status__in=IncidentStatus.ACTIVE_STATUSES)
+            .exclude(id=origin_incident.id)
+            .exclude(ticket_id_tss=tid)
+        )
+
+        updated_count = 0
+        for peer in peers:
+            peer.ticket_id_tss = tid
+            peer.tts_status = tts_status or 'Open'
+            update_fields = ['ticket_id_tss', 'tts_status', 'updated_at']
+            if repair_team and not peer.repair_team:
+                peer.repair_team = repair_team
+                update_fields.append('repair_team')
+            peer.save(update_fields=update_fields)
+
+            peer.add_timeline_entry(
+                event_type=TimelineEventType.TICKET_LINKED,
+                source='NT_TTS_PEER_SYNC',
+                description=f"Auto-linked Trouble Ticket {tid} from peer circuit incident {origin_incident.incident_number}",
+                data={
+                    'ticket_id_tss': tid,
+                    'incident_id': incident_id_im,
+                    'circuit_id': cid,
+                    'peer_incident': origin_incident.incident_number,
+                    'reused': is_reused,
+                },
+            )
+            updated_count += 1
+            logger.info(
+                f"TicketPolicyService: Auto-propagated NT TTS ticket {tid} "
+                f"to peer Incident {peer.incident_number} (Circuit: {cid})"
+            )
+        return updated_count
 
     def evaluate_eligibility(self, incident: Incident, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -73,9 +198,33 @@ class TicketPolicyService:
         remaining_sec = max(0, SUSTAINED_DOWN_SECONDS - downtime_sec)
 
         # -------------------------------------------------------------
-        # Condition 4: No existing ticket already opened
+        # Condition 4: No existing ticket already opened (Self or Active Peer)
         # -------------------------------------------------------------
-        has_existing_db = bool((incident.ticket_id_tss or '').strip())
+        existing_ticket = (incident.ticket_id_tss or '').strip()
+        if not existing_ticket and circuit_id:
+            peer_inc = self.find_active_circuit_tts_ticket(circuit_id, exclude_incident_id=incident.id)
+            if peer_inc and peer_inc.ticket_id_tss:
+                existing_ticket = peer_inc.ticket_id_tss.strip()
+                # Auto-link from peer if this incident is active
+                if incident.status in IncidentStatus.ACTIVE_STATUSES:
+                    incident.ticket_id_tss = existing_ticket
+                    incident.tts_status = peer_inc.tts_status or 'Open'
+                    up_fields = ['ticket_id_tss', 'tts_status', 'updated_at']
+                    if not incident.circuit_id and circuit_id:
+                        incident.circuit_id = circuit_id
+                        up_fields.append('circuit_id')
+                    if peer_inc.repair_team and not incident.repair_team:
+                        incident.repair_team = peer_inc.repair_team
+                        up_fields.append('repair_team')
+                    incident.save(update_fields=up_fields)
+                    incident.add_timeline_entry(
+                        event_type=TimelineEventType.TICKET_LINKED,
+                        source='NT_TTS_PEER_SYNC',
+                        description=f"Auto-linked Trouble Ticket {existing_ticket} from peer circuit incident {peer_inc.incident_number}",
+                        data={'ticket_id_tss': existing_ticket, 'circuit_id': circuit_id, 'peer_incident': peer_inc.incident_number},
+                    )
+
+        has_existing_db = bool(existing_ticket)
         cond_no_existing_ticket = not has_existing_db
 
         # Overall decision
@@ -95,7 +244,7 @@ class TicketPolicyService:
             minutes_left = (remaining_sec + 59) // 60
             reasons.append(f"ยัง Down ไม่ต่อเนื่องครบ 15 นาที (ปัจจุบัน {downtime_sec // 60} นาที, เหลืออีก {minutes_left} นาที)")
         if not cond_no_existing_ticket:
-            reasons.append(f"มีการเปิด Ticket แล้วในระบบ ({incident.ticket_id_tss})")
+            reasons.append(f"มีการเปิด Ticket แล้วในระบบ ({existing_ticket})")
 
         return {
             "is_eligible": is_eligible,
@@ -123,7 +272,7 @@ class TicketPolicyService:
                 "no_existing_ticket": {
                     "passed": cond_no_existing_ticket,
                     "label": "ยังไม่มีการเปิด Ticket",
-                    "existing_ticket": incident.ticket_id_tss or None
+                    "existing_ticket": existing_ticket or None
                 }
             },
             "reasons": reasons,
